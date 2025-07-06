@@ -25,11 +25,11 @@ export function AdminLayout() {
     navigate('/auth');
   };
 
-  // The only change is adding the 'Users' link here
   const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: BarChart3 },
     { name: 'Manage Companies', href: '/admin/companies', icon: Building2 },
     { name: 'Users', href: '/admin/users', icon: Users },
+    { name: 'Manage Plans', href: '/admin/plans', icon: Crown }, // This is the new line
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];
 
