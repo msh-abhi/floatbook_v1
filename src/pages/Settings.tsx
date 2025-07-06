@@ -19,6 +19,10 @@ export function Settings() {
   
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activationKey, setActivationKey] = useState('');
+  
+  // --- THIS IS THE MISSING LINE THAT CAUSED THE CRASH ---
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  // ----------------------------------------------------
 
   const [companyForm, setCompanyForm] = useState({
     name: '',
@@ -130,42 +134,68 @@ export function Settings() {
     }
   };
   
-  // --- THIS IS THE CORRECTED ACTIVATION FUNCTION ---
   const handleActivateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activationKey.trim()) {
       alert("Please enter an activation key.");
       return;
     }
-    
     try {
       const { data, error } = await supabase.rpc('activate_plan_with_key', {
         activation_key: activationKey.trim()
       });
 
       if (error) {
-        // This will catch database-level errors
         throw new Error(error.message);
       }
       
-      // The RPC function returns the JSON object directly in the `data` property.
       if (data && data.message) {
         alert(data.message);
         if (data.success) {
           window.location.reload(); 
         }
       } else {
-        // This case will be hit if the function returns null or an unexpected format.
-        console.error("Unexpected response from RPC function:", data);
         throw new Error("Received an unexpected response from the server.");
       }
-
     } catch (err: any) {
       console.error("Activation error:", err);
       alert(`Activation Failed: ${err.message}`);
     }
   };
-  // ------------------------------------------------
+  
+  const handleStripeUpgrade = async (priceId: string | undefined) => {
+    if (!priceId) {
+        alert('This plan is not configured for Stripe payments yet.');
+        return;
+    }
+
+    setIsRedirecting(true);
+    try {
+        const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
+            body: { price_id: priceId },
+        });
+
+        if (error) {
+            throw new Error(`Edge Function invocation failed: ${error.message}`);
+        }
+
+        if (data.error) {
+            throw new Error(`Stripe Error: ${data.error}`);
+        }
+        
+        if (data.checkout_url) {
+            window.location.href = data.checkout_url;
+        } else {
+            console.error("Unexpected response from checkout function:", data);
+            throw new Error("Could not create a checkout session. Please try again.");
+        }
+
+    } catch (error: any) {
+        console.error("Stripe upgrade process failed:", error);
+        alert('Error starting subscription: ' + error.message);
+        setIsRedirecting(false);
+    }
+  };
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -216,7 +246,6 @@ export function Settings() {
         <h1 className="text-3xl font-bold text-slate-900 mb-2">Settings</h1>
         <p className="text-slate-600">Manage your company settings and preferences.</p>
       </div>
-
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="lg:w-64">
           <nav className="bg-white rounded-xl shadow-sm border border-gray-100 p-2">
@@ -239,15 +268,11 @@ export function Settings() {
             })}
           </nav>
         </div>
-
         <div className="flex-1">
           {activeTab === 'company' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-emerald-600" />
-                  Company Information
-                </h2>
+                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Building2 className="h-5 w-5 text-emerald-600" />Company Information</h2>
               </div>
               <div className="p-6">
                 <form onSubmit={handleUpdateCompany} className="space-y-6">
