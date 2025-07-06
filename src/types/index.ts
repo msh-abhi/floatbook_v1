@@ -116,3 +116,12 @@ export interface Company {
   plan_name?: string; // Add this line
   created_at: string;
 }
+
+export interface Subscription {
+  id: string;
+  company_id: string;
+  plan_id: string;
+  status: 'active' | 'canceled' | 'past_due';
+  current_period_end: string;
+  created_at: string;
+}
