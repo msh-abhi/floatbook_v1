@@ -10,7 +10,8 @@ import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { ManageCompanies } from './pages/admin/ManageCompanies';
 import { useAuth } from './hooks/useAuth';
 import { ManageUsers } from './pages/admin/ManageUsers';
-import { ManagePlans } from './pages/admin/ManagePlans'; // New component import
+import { ManagePlans } from './pages/admin/ManagePlans';
+import { ManageKeys } from './pages/admin/ManageKeys'; // New import
 
 // Lazy load other pages
 const Bookings = React.lazy(() => import('./pages/Bookings').then(module => ({ default: module.Bookings })));
@@ -48,8 +49,8 @@ function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="companies" element={<ManageCompanies />} />
             <Route path="users" element={<ManageUsers />} />
-            {/* The new route is added here */}
-            <Route path="plans" element={<ManagePlans />} /> 
+            <Route path="plans" element={<ManagePlans />} />
+            <Route path="keys" element={<ManageKeys />} /> {/* New route */}
             <Route path="settings" element={<div className="p-8"><h1 className="text-2xl font-bold">Admin Settings</h1><p className="text-slate-600 mt-2">Coming soon...</p></div>} />
           </Route>
           {/* Redirect any non-admin routes to admin dashboard */}
