@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, Calendar, DollarSign, Search, Eye, Edit, Trash2, Crown, MapPin } from 'lucide-react';
+import { Building2, Users, Calendar, DollarSign, Search, Eye, Trash2, Crown, MapPin, Mail } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { Company as BaseCompany, CompanyUser } from '../../types';
 
-interface Company {
-  id: string;
-  name: string;
-  logo_url?: string;
-  address?: string;
-  currency: string;
-  tax_enabled: boolean;
-  tax_rate: number;
-  created_at: string;
+// Extend the base Company type to include the stats and admin email
+interface Company extends BaseCompany {
+  admin_email?: string;
   user_count?: number;
   booking_count?: number;
   total_revenue?: number;
@@ -31,7 +26,7 @@ export function ManageCompanies() {
     try {
       setLoading(true);
 
-      // Fetch companies
+      // 1. Fetch all companies
       const { data: companiesData, error: companiesError } = await supabase
         .from('companies')
         .select('*')
@@ -39,31 +34,46 @@ export function ManageCompanies() {
 
       if (companiesError) throw companiesError;
 
-      // Fetch additional data for each company
-      const companiesWithStats = await Promise.all(
-        (companiesData || []).map(async (company) => {
-          // Get user count
-          const { data: users } = await supabase
-            .from('company_users')
-            .select('id')
-            .eq('company_id', company.id);
+      // 2. Fetch all company_users to get admin emails and user counts
+      const { data: companyUsersData, error: usersError } = await supabase
+        .from('company_users')
+        .select('company_id, user_email, role');
 
-          // Get booking count and revenue
-          const { data: bookings } = await supabase
-            .from('bookings')
-            .select('total_amount')
-            .eq('company_id', company.id);
+      if (usersError) throw usersError;
 
-          const totalRevenue = bookings?.reduce((sum, booking) => sum + Number(booking.total_amount), 0) || 0;
+      // 3. Fetch all bookings to calculate revenue and booking counts
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('company_id, total_amount');
 
-          return {
-            ...company,
-            user_count: users?.length || 0,
-            booking_count: bookings?.length || 0,
-            total_revenue: totalRevenue,
-          };
-        })
-      );
+      if (bookingsError) throw bookingsError;
+
+      // 4. Process the data efficiently
+      const statsMap = new Map<string, { user_count: number; admin_email?: string; booking_count: number; total_revenue: number }>();
+
+      // Process users to find admins and count users per company
+      companyUsersData?.forEach(user => {
+        const stat = statsMap.get(user.company_id) || { user_count: 0, booking_count: 0, total_revenue: 0 };
+        stat.user_count++;
+        if (user.role === 'admin' && user.user_email) {
+          stat.admin_email = user.user_email;
+        }
+        statsMap.set(user.company_id, stat);
+      });
+
+      // Process bookings to count bookings and sum revenue
+      bookingsData?.forEach(booking => {
+        const stat = statsMap.get(booking.company_id) || { user_count: 0, booking_count: 0, total_revenue: 0 };
+        stat.booking_count++;
+        stat.total_revenue += Number(booking.total_amount);
+        statsMap.set(booking.company_id, stat);
+      });
+
+      // 5. Combine company data with the processed stats
+      const companiesWithStats = (companiesData || []).map(company => ({
+        ...company,
+        ...statsMap.get(company.id),
+      }));
 
       setCompanies(companiesWithStats);
     } catch (error) {
@@ -72,6 +82,7 @@ export function ManageCompanies() {
       setLoading(false);
     }
   };
+
 
   const handleViewDetails = (company: Company) => {
     setSelectedCompany(company);
@@ -100,7 +111,8 @@ export function ManageCompanies() {
 
   const filteredCompanies = companies.filter(company =>
     company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    company.currency.toLowerCase().includes(searchQuery.toLowerCase())
+    (company.admin_email && company.admin_email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (company.address && company.address.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const formatCurrency = (amount: number, currency: string = 'USD') => {
@@ -156,126 +168,91 @@ export function ManageCompanies() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
           <input
             type="text"
-            placeholder="Search companies by name or currency..."
+            placeholder="Search by company, email, or address..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 p-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500"
+            className="w-full pl-10 p-3 border border-gray-200 rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500"
           />
         </div>
       </div>
 
-      {/* Companies List */}
-      {filteredCompanies.length === 0 ? (
-        <div className="text-center py-12">
-          <Building2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">
-            {searchQuery ? 'No companies found' : 'No companies yet'}
-          </h3>
-          <p className="text-slate-600">
-            {searchQuery ? 'Try adjusting your search terms.' : 'Companies will appear here as users sign up.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredCompanies.map((company) => (
-            <div key={company.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4 flex-1">
-                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                    {company.logo_url ? (
-                      <img
-                        src={company.logo_url}
-                        alt={`${company.name} logo`}
-                        className="w-full h-full rounded-lg object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <Building2 className="h-6 w-6 text-white" />
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-3">
+      {/* Companies Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+           <table className="w-full text-left">
+            <thead className="border-b bg-gray-50">
+              <tr>
+                <th className="p-4 text-sm font-semibold text-slate-600">Company</th>
+                <th className="p-4 text-sm font-semibold text-slate-600">Contact</th>
+                <th className="p-4 text-sm font-semibold text-slate-600">Stats</th>
+                <th className="p-4 text-sm font-semibold text-slate-600">Subscription</th>
+                <th className="p-4 text-sm font-semibold text-slate-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCompanies.map((company) => (
+                <tr key={company.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                  <td className="p-4 align-top">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Building2 className="h-5 w-5 text-emerald-600" />
+                      </div>
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-900 mb-1">{company.name}</h3>
-                        <div className="flex items-center gap-4 text-sm text-slate-600">
-                          <span>Created {formatDate(company.created_at)}</span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="h-4 w-4" />
-                            {company.currency}
-                          </span>
-                          {company.address && (
-                            <>
-                              <span>•</span>
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-4 w-4" />
-                                {company.address}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
-                          <Crown className="h-3 w-3" />
-                          Free Plan
-                        </span>
+                        <p className="font-semibold text-slate-800">{company.name}</p>
+                        <p className="text-xs text-slate-500">Joined {formatDate(company.created_at)}</p>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                      <div className="flex items-center gap-2">
+                  </td>
+                  <td className="p-4 align-top">
+                     <div className="flex items-center gap-2 mb-1">
+                      <Mail className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                      <span className="text-sm text-slate-600">{company.admin_email || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <MapPin className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                      <span className="text-sm text-slate-600">{company.address || 'No address'}</span>
+                    </div>
+                  </td>
+                   <td className="p-4 align-top text-sm">
+                     <div className="flex items-center gap-2 mb-1">
                         <Users className="h-4 w-4 text-slate-400" />
-                        <span className="text-sm text-slate-600">
-                          {company.user_count} {company.user_count === 1 ? 'user' : 'users'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                        <span>{company.user_count || 0} users</span>
+                     </div>
+                     <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-slate-400" />
-                        <span className="text-sm text-slate-600">
-                          {company.booking_count} {company.booking_count === 1 ? 'booking' : 'bookings'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-slate-400" />
-                        <span className="text-sm text-slate-600 font-medium">
-                          {formatCurrency(company.total_revenue || 0, company.currency)}
-                        </span>
-                      </div>
+                        <span>{company.booking_count || 0} bookings</span>
+                     </div>
+                   </td>
+                   <td className="p-4 align-top">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-medium">
+                        <Crown className="h-3 w-3" />
+                        Free Plan
+                      </span>
+                   </td>
+                  <td className="p-4 align-top">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => handleViewDetails(company)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="View Details">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDeleteCompany(company.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete Company">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-
-                    {company.tax_enabled && (
-                      <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                        Tax enabled ({company.tax_rate}%)
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 ml-4">
-                  <button
-                    onClick={() => handleViewDetails(company)}
-                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="View Details"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCompany(company.id)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete Company"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {filteredCompanies.length === 0 && (
+            <div className="text-center py-12">
+              <Building2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">No companies found</h3>
+              <p className="text-slate-600">Try adjusting your search terms.</p>
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </div>
+
 
       {/* Company Detail Modal */}
       {showDetailModal && selectedCompany && (
@@ -284,17 +261,13 @@ export function ManageCompanies() {
             <div className="p-6 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-slate-900">Company Details</h2>
-                <button
-                  onClick={() => setShowDetailModal(false)}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-gray-100 rounded-lg">
                   ×
                 </button>
               </div>
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Basic Info */}
               <div>
                 <h3 className="text-lg font-medium text-slate-900 mb-4">Basic Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -303,10 +276,14 @@ export function ManageCompanies() {
                     <p className="text-slate-900">{selectedCompany.name}</p>
                   </div>
                   <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Admin Email</label>
+                    <p className="text-slate-900">{selectedCompany.admin_email || 'N/A'}</p>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
                     <p className="text-slate-900">{selectedCompany.currency}</p>
                   </div>
-                  {selectedCompany.address && (
+                   {selectedCompany.address && (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
                       <p className="text-slate-900">{selectedCompany.address}</p>
@@ -316,14 +293,13 @@ export function ManageCompanies() {
                     <label className="block text-sm font-medium text-slate-700 mb-1">Created</label>
                     <p className="text-slate-900">{formatDate(selectedCompany.created_at)}</p>
                   </div>
-                  <div>
+                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Company ID</label>
                     <p className="text-slate-500 text-sm font-mono">{selectedCompany.id}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Tax Settings */}
               <div>
                 <h3 className="text-lg font-medium text-slate-900 mb-4">Tax Settings</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -340,7 +316,6 @@ export function ManageCompanies() {
                 </div>
               </div>
 
-              {/* Statistics */}
               <div>
                 <h3 className="text-lg font-medium text-slate-900 mb-4">Statistics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -364,10 +339,7 @@ export function ManageCompanies() {
 
             <div className="p-6 border-t border-gray-100">
               <div className="flex justify-end">
-                <button
-                  onClick={() => setShowDetailModal(false)}
-                  className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium"
-                >
+                <button onClick={() => setShowDetailModal(false)} className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium">
                   Close
                 </button>
               </div>
