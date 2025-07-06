@@ -3,7 +3,7 @@ import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsI
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useCompany } from '../hooks/useCompany';
-import { CompanyUser, Plan } from '../types'; // Import the Plan type
+import { CompanyUser, Plan } from '../types';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 export function Settings() {
@@ -17,10 +17,9 @@ export function Settings() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'company' | 'team' | 'email' | 'payment' | 'plans' | 'tax'>('company');
   
-  // --- States for new subscription functionality ---
+  // States for new subscription functionality
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activationKey, setActivationKey] = useState('');
-  // ---------------------------------------------
 
   const [companyForm, setCompanyForm] = useState({
     name: '',
@@ -29,7 +28,7 @@ export function Settings() {
     currency: 'USD',
     tax_enabled: false,
     tax_rate: 0,
-    plan_name: 'Free', // Add plan_name to track current plan
+    plan_name: 'Free',
   });
 
   const [emailSettings, setEmailSettings] = useState({
@@ -53,7 +52,7 @@ export function Settings() {
         currency: company.currency || 'USD',
         tax_enabled: company.tax_enabled || false,
         tax_rate: company.tax_rate || 0,
-        plan_name: company.plan_name || 'Free', // Set the plan name from company data
+        plan_name: company.plan_name || 'Free',
       });
     }
   }, [company]);
@@ -61,7 +60,7 @@ export function Settings() {
   useEffect(() => {
     if (companyId) {
       fetchCompanyUsers();
-      fetchPlans(); // Fetch plans when the component loads
+      fetchPlans();
     } else {
       setLoading(false);
     }
@@ -85,30 +84,25 @@ export function Settings() {
     } catch (error) {
       console.error('Error fetching company users:', error);
     } finally {
-      // Only set loading to false if both fetches are done
       if (plans.length > 0) {
         setLoading(false);
       }
     }
   };
 
-  // --- New function to fetch plans from the database ---
   const fetchPlans = async () => {
     try {
       const { data, error } = await supabase.from('plans').select('*').order('price');
       if (error) throw error;
-      // @ts-ignore
       setPlans(data || []);
     } catch(e) {
       console.error("Error fetching plans", e)
     } finally {
-      // Only set loading to false if both fetches are done
       if (companyUsers.length > 0 || !companyId) {
          setLoading(false);
       }
     }
   };
-  // ----------------------------------------------------
 
   const handleUpdateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,33 +131,39 @@ export function Settings() {
     }
   };
   
-  // --- New function to handle the activation key submission ---
+  // --- THIS IS THE CORRECTED FUNCTION ---
   const handleActivateKey = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!activationKey.trim()) {
-          alert("Please enter an activation key.");
-          return;
+    e.preventDefault();
+    if (!activationKey.trim()) {
+      alert("Please enter an activation key.");
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase.rpc('activate_plan_with_key', {
+        activation_key: activationKey.trim()
+      });
+
+      if (error) {
+        throw new Error(error.message);
       }
       
-      try {
-          const { data, error } = await supabase.rpc('activate_plan_with_key', {
-              activation_key: activationKey.trim()
-          });
-
-          if (error) throw error;
-
-          // @ts-ignore
-          alert(data.message);
-          // @ts-ignore
-          if (data.success) {
-              window.location.reload(); // Reload to reflect the new plan
-          }
-      } catch (err) {
-          console.error("Activation error:", err);
-          alert("An error occurred during activation.");
+      if (data && data.message) {
+        alert(data.message);
+        if (data.success) {
+          window.location.reload(); 
+        }
+      } else {
+        alert('Activation process completed, but the response was unexpected.');
       }
+
+    } catch (err: any) {
+      console.error("Activation error:", err);
+      // Display the actual error message from the database function
+      alert(`Activation Failed: ${err.message}`);
+    }
   };
-  // -----------------------------------------------------------
+  // ------------------------------------
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -507,13 +507,13 @@ export function Settings() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                 <div className="p-6 border-b border-gray-100">
                   <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Crown className="h-5 w-5 text-yellow-600" /> Subscription Plans</h2>
-                  <p className="text-sm text-slate-500 mt-1">Your current plan is: <span className="font-bold text-emerald-600">{company?.plan_name || 'Free'}</span></p>
+                  <p className="text-sm text-slate-500 mt-1">Your current plan is: <span className="font-bold text-emerald-600">{companyForm.plan_name}</span></p>
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {plans.map((plan) => (
-                      <div key={plan.name} className={`relative rounded-xl border-2 p-6 ${company?.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'} transition-all`}>
-                        {company?.plan_name === plan.name && (
+                      <div key={plan.id} className={`relative rounded-xl border-2 p-6 ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'} transition-all`}>
+                        {companyForm.plan_name === plan.name && (
                           <div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>
                         )}
                         <div className="text-center">
@@ -527,7 +527,7 @@ export function Settings() {
                               <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
                               <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
                           </ul>
-                          {company?.plan_name !== plan.name && (
+                          {companyForm.plan_name !== plan.name && (
                             <button className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700">Upgrade</button>
                           )}
                         </div>
