@@ -10,7 +10,8 @@ import {
   Menu,
   X,
   Crown,
-  Shield
+  Shield,
+  Key
 } from 'lucide-react';
 
 export function AdminLayout() {
@@ -29,7 +30,8 @@ export function AdminLayout() {
     { name: 'Dashboard', href: '/admin/dashboard', icon: BarChart3 },
     { name: 'Manage Companies', href: '/admin/companies', icon: Building2 },
     { name: 'Users', href: '/admin/users', icon: Users },
-    { name: 'Manage Plans', href: '/admin/plans', icon: Crown }, // This is the new line
+    { name: 'Manage Plans', href: '/admin/plans', icon: Crown },
+    { name: 'Manage Keys', href: '/admin/keys', icon: Key }, // New link
     { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];
 
