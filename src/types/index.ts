@@ -104,3 +104,15 @@ export interface Plan {
   user_limit: number;
   stripe_price_id?: string;
 }
+
+export interface Company {
+  id: string;
+  name: string;
+  logo_url?: string;
+  address?: string;
+  currency?: string;
+  tax_enabled?: boolean;
+  tax_rate?: number;
+  plan_name?: string; // Add this line
+  created_at: string;
+}
