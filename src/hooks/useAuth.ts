@@ -6,13 +6,14 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [systemRole, setSystemRole] = useState<string>('user');
 
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserCompany(session.user.id);
+        fetchUserData(session.user.id);
       } else {
         setLoading(false);
       }
@@ -22,9 +23,10 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserCompany(session.user.id);
+        fetchUserData(session.user.id);
       } else {
         setCompanyId(null);
+        setSystemRole('user');
         setLoading(false);
       }
     });
@@ -32,20 +34,41 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserCompany = async (userId: string) => {
+  const fetchUserData = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      // Fetch user's system role
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('system_role')
+        .eq('id', userId)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user data:', userError);
+      } else {
+        setSystemRole(userData?.system_role || 'user');
+      }
+
+      // If user is superadmin, don't fetch company data
+      if (userData?.system_role === 'superadmin') {
+        setCompanyId(null);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch user's company for regular users
+      const { data: companyData, error: companyError } = await supabase
         .from('company_users')
         .select('company_id')
         .eq('user_id', userId);
 
-      if (error) {
-        console.error('Error fetching user company:', error);
-      } else if (data && data.length > 0) {
-        setCompanyId(data[0].company_id);
+      if (companyError) {
+        console.error('Error fetching user company:', companyError);
+      } else if (companyData && companyData.length > 0) {
+        setCompanyId(companyData[0].company_id);
       }
     } catch (error) {
-      console.error('Error fetching user company:', error);
+      console.error('Error fetching user data:', error);
     } finally {
       setLoading(false);
     }
@@ -76,9 +99,10 @@ export function useAuth() {
     user,
     loading,
     companyId,
+    systemRole,
     signIn,
     signUp,
     signOut,
-    refreshCompany: () => user && fetchUserCompany(user.id),
+    refreshCompany: () => user && fetchUserData(user.id),
   };
 }
