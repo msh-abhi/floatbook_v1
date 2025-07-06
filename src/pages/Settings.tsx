@@ -31,16 +31,8 @@ export function Settings() {
     plan_name: 'Free',
   });
 
-  const [emailSettings, setEmailSettings] = useState({
-    brevo_api_key: '',
-  });
-  
-  const [paymentSettings, setPaymentSettings] = useState({
-    stripe_secret_key: '',
-    paypal_client_id: '',
-    bkash_merchant_id: '',
-  });
-  
+  const [emailSettings, setEmailSettings] = useState({ brevo_api_key: '' });
+  const [paymentSettings, setPaymentSettings] = useState({ stripe_secret_key: '', paypal_client_id: '', bkash_merchant_id: '' });
   const [inviteEmail, setInviteEmail] = useState('');
 
   useEffect(() => {
@@ -75,18 +67,13 @@ export function Settings() {
   const fetchCompanyUsers = async () => {
     if (!companyId) return;
     try {
-      const { data, error } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', companyId);
+      const { data, error } = await supabase.from('company_users').select('*').eq('company_id', companyId);
       if (error) throw error;
       setCompanyUsers(data || []);
     } catch (error) {
       console.error('Error fetching company users:', error);
     } finally {
-      if (plans.length > 0) {
-        setLoading(false);
-      }
+      if (plans.length > 0) setLoading(false);
     }
   };
 
@@ -98,9 +85,7 @@ export function Settings() {
     } catch(e) {
       console.error("Error fetching plans", e)
     } finally {
-      if (companyUsers.length > 0 || !companyId) {
-         setLoading(false);
-      }
+      if (companyUsers.length > 0 || !companyId) setLoading(false);
     }
   };
 
@@ -117,12 +102,9 @@ export function Settings() {
         tax_rate: companyForm.tax_rate,
       });
 
-      if (error) {
-        alert('Error updating company. Please try again.');
-      } else {
-        alert('Company information updated successfully!');
-        window.location.reload();
-      }
+      if (error) throw error;
+      alert('Company information updated successfully!');
+      window.location.reload();
     } catch (error) {
       console.error('Error updating company:', error);
       alert('Error updating company. Please try again.');
@@ -138,51 +120,61 @@ export function Settings() {
       return;
     }
     try {
-      const { data, error } = await supabase.rpc('activate_plan_with_key', {
-        activation_key: activationKey.trim()
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-      
+      const { data, error } = await supabase.rpc('activate_plan_with_key', { activation_key: activationKey.trim() });
+      if (error) throw new Error(error.message);
       if (data && data.message) {
         alert(data.message);
-        if (data.success) {
-          window.location.reload(); 
-        }
+        if (data.success) window.location.reload();
       } else {
         alert('Activation process completed, but the response was unexpected.');
       }
-
     } catch (err: any) {
       console.error("Activation error:", err);
       alert(`Activation Failed: ${err.message}`);
     }
   };
 
+  // --- THIS IS THE CORRECTED STRIPE FUNCTION ---
   const handleStripeUpgrade = async (priceId: string | undefined) => {
     if (!priceId) {
-      alert('This plan is not configured for Stripe payments yet.');
-      return;
+        alert('This plan is not configured for Stripe payments yet.');
+        return;
     }
 
     setIsRedirecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
-        body: { price_id: priceId },
-      });
+        const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
+            body: { price_id: priceId },
+        });
 
-      if (error) throw error;
+        // The Edge Function itself might succeed (no crash), but return an error from Stripe
+        if (error) {
+            // This will catch network errors or if the function itself crashes
+            throw new Error(`Edge Function invocation failed: ${error.message}`);
+        }
 
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url;
-      }
+        // The function ran, but did it return a checkout URL or an error message?
+        if (data.error) {
+            // This catches logical errors returned from within our function's try/catch block
+            throw new Error(`Stripe Error: ${data.error}`);
+        }
+        
+        if (data.checkout_url) {
+            window.location.href = data.checkout_url;
+        } else {
+            // This is a fallback for unexpected successful responses without a URL
+            console.error("Unexpected response from checkout function:", data);
+            throw new Error("Could not create a checkout session. Please try again.");
+        }
+
     } catch (error: any) {
-      alert('Error starting subscription: ' + error.message);
-      setIsRedirecting(false);
+        // This will now catch and display all errors clearly
+        console.error("Stripe upgrade process failed:", error);
+        alert('Error starting subscription: ' + error.message);
+        setIsRedirecting(false);
     }
   };
+  // ---------------------------------------------
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,206 +221,167 @@ export function Settings() {
 
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Settings</h1>
-        <p className="text-slate-600">Manage your company settings and preferences.</p>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-8">
-        <div className="lg:w-64">
-          <nav className="bg-white rounded-xl shadow-sm border border-gray-100 p-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-sm'
-                      : 'text-slate-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{tab.name}</span>
-                </button>
-              );
-            })}
-          </nav>
+        <div className="mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 mb-2">Settings</h1>
+            <p className="text-slate-600">Manage your company settings and preferences.</p>
         </div>
-
-        <div className="flex-1">
-          {activeTab === 'company' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-emerald-600" />
-                  Company Information
-                </h2>
-              </div>
-              <div className="p-6">
-                <form onSubmit={handleUpdateCompany} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label htmlFor="company_name" className="block text-sm font-medium text-slate-700 mb-2">Company Name *</label>
-                      <input id="company_name" type="text" value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" />
-                    </div>
-                    <div>
-                      <label htmlFor="address" className="block text-sm font-medium text-slate-700 mb-2">Address</label>
-                      <input id="address" type="text" value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Company address" />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="company_currency" className="block text-sm font-medium text-slate-700 mb-2">Currency</label>
-                    <select id="company_currency" value={companyForm.currency} onChange={(e) => setCompanyForm({ ...companyForm, currency: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
-                      <option value="USD">USD ($)</option>
-                      <option value="BDT">BDT (৳)</option>
-                      <option value="GBP">GBP (£)</option>
-                      <option value="EUR">EUR (€)</option>
-                    </select>
-                    <p className="text-xs text-red-500 mt-1">Note: This only changes the currency symbol. No amounts will be converted.</p>
-                  </div>
-                  <div>
-                    <label htmlFor="logo_url" className="block text-sm font-medium text-slate-700 mb-2">Logo URL</label>
-                    <div className="flex gap-3">
-                      <input id="logo_url" type="url" value={companyForm.logo_url} onChange={(e) => setCompanyForm({ ...companyForm, logo_url: e.target.value })} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="https://example.com/logo.png" />
-                      {companyForm.logo_url && (
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                          <img src={companyForm.logo_url} alt="Logo preview" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <button type="submit" disabled={saving} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl">
-                      {saving ? 'Saving...' : 'Save Changes'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-          {activeTab === 'tax' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Calculator className="h-5 w-5 text-emerald-600" />Tax Settings</h2>
-              </div>
-              <div className="p-6">
-                <form onSubmit={handleUpdateCompany} className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-stone-50 rounded-lg">
-                    <div>
-                      <h3 className="text-sm font-medium text-slate-900">Enable Tax</h3>
-                      <p className="text-sm text-slate-600">Automatically apply tax to all bookings</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={companyForm.tax_enabled} onChange={(e) => setCompanyForm({ ...companyForm, tax_enabled: e.target.checked })} className="sr-only peer" />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                    </label>
-                  </div>
-                  {companyForm.tax_enabled && (
-                    <div>
-                      <label htmlFor="tax_rate" className="block text-sm font-medium text-slate-700 mb-2">Tax Rate (%)</label>
-                      <input id="tax_rate" type="number" step="0.01" min="0" max="100" value={companyForm.tax_rate} onChange={(e) => setCompanyForm({ ...companyForm, tax_rate: parseFloat(e.target.value) || 0 })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="0.00" />
-                      <p className="text-xs text-slate-500 mt-1">Enter the tax percentage to be applied to all bookings.</p>
-                    </div>
-                  )}
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-sm text-yellow-700"><strong>Note:</strong> Tax will be calculated on the discounted amount and added to the final total for all new bookings.</p>
-                  </div>
-                  <div className="flex justify-end">
-                    <button type="submit" disabled={saving} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl">
-                      {saving ? 'Saving...' : 'Save Tax Settings'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-          {activeTab === 'team' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Users className="h-5 w-5 text-emerald-600" />Team Members</h2>
-                  <button onClick={() => setShowInviteModal(true)} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-2 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-2"><UserPlus className="h-4 w-4" />Invite User</button>
-                </div>
-              </div>
-              <div className="p-6">
-                {companyUsers.length === 0 ? (<div className="text-center py-12"><Users className="h-16 w-16 text-gray-300 mx-auto mb-4" /><h3 className="text-lg font-medium text-slate-900 mb-2">No team members yet</h3><p className="text-slate-600">Invite your first team member to get started.</p></div>) : (<div className="space-y-4">{companyUsers.map((companyUser) => (<div key={companyUser.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border"><div className="flex items-center gap-4"><div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center"><span className="text-white text-lg font-semibold">{companyUser.user_email?.charAt(0).toUpperCase() || 'U'}</span></div><div><p className="font-semibold text-slate-900">{companyUser.user_email || 'Unknown User'}</p><div className="flex items-center gap-2"><span className="text-sm text-slate-600 capitalize">{companyUser.role}</span>{companyUser.user_id === user?.id && (<span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full font-medium">You</span>)}</div></div></div>{companyUser.user_id !== user?.id && (<button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="h-5 w-5" /></button>)}</div>))}</div>)}
-              </div>
-            </div>
-          )}
-          {activeTab === 'email' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Mail className="h-5 w-5 text-emerald-600" />Email Settings</h2></div>
-              <div className="p-6"><div className="space-y-6"><div><label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label><div className="relative"><Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id="brevo_api_key" type="password" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter your Brevo API key" /></div><p className="text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p></div><div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p></div></div></div>
-            </div>
-          )}
-          {activeTab === 'payment' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><CreditCard className="h-5 w-5 text-emerald-600" />Payment Method Settings</h2></div>
-              <div className="p-6"><div className="space-y-6"><div><label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">Stripe Secret Key</label><input id="stripe_secret_key" type="password" value={paymentSettings.stripe_secret_key} onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="sk_test_..."/></div><div><label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">PayPal Client ID</label><input id="paypal_client_id" type="text" value={paymentSettings.paypal_client_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter PayPal Client ID"/></div><div><label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">bKash Merchant ID</label><input id="bkash_merchant_id" type="text" value={paymentSettings.bkash_merchant_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter bKash Merchant ID"/></div><div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"><p className="text-sm text-yellow-700"><strong>Security:</strong> Payment credentials are encrypted and stored securely.</p></div></div></div>
-            </div>
-          )}
-          {activeTab === 'plans' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-6 border-b border-gray-100">
-                  <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Crown className="h-5 w-5 text-yellow-600" /> Subscription Plans</h2>
-                  <p className="text-sm text-slate-500 mt-1">Your current plan is: <span className="font-bold text-emerald-600">{companyForm.plan_name}</span></p>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {plans.map((plan) => (
-                      <div key={plan.id} className={`relative rounded-xl border-2 p-6 ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'} transition-all`}>
-                        {companyForm.plan_name === plan.name && (
-                          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>
-                        )}
-                        <div className="text-center">
-                          <h3 className="text-lg font-semibold text-slate-900 mb-2">{plan.name}</h3>
-                          <div className="mb-4"><span className="text-3xl font-bold text-slate-900">${plan.price}</span><span className="text-slate-600">/month</span></div>
-                          <ul className="space-y-2 mb-6 text-sm text-slate-600">
-                            <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.room_limit === -1 ? 'Unlimited' : `${plan.room_limit} rooms`}</li>
-                            <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
-                            <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
-                          </ul>
-                          {companyForm.plan_name !== plan.name && (
-                            <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait">
-                              {isRedirecting ? 'Redirecting...' : 'Upgrade'}
+        <div className="flex flex-col lg:flex-row gap-8">
+            <div className="lg:w-64">
+                <nav className="bg-white rounded-xl shadow-sm border border-gray-100 p-2">
+                    {tabs.map((tab) => {
+                        const Icon = tab.icon;
+                        return (
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-all ${activeTab === tab.id ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-sm' : 'text-slate-700 hover:bg-gray-50'}`}>
+                                <Icon className="h-5 w-5" />
+                                <span className="font-medium">{tab.name}</span>
                             </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-6 border-b"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Key className="h-5 w-5 text-emerald-600"/> Have an Activation Key?</h2></div>
-                <form onSubmit={handleActivateKey} className="p-6 space-y-4">
-                  <div><label htmlFor="activation_key" className="block text-sm font-medium text-slate-700 mb-2">Enter your key to upgrade your plan.</label><input id="activation_key" type="text" value={activationKey} onChange={(e) => setActivationKey(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder="PRO-XXXX-XXXX"/></div>
-                  <div className="flex justify-end"><button type="submit" className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700">Activate Plan</button></div>
-                </form>
-              </div>
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900">Account</h2></div>
-                <div className="p-6"><div className="flex items-center justify-between"><div><h3 className="text-sm font-medium text-slate-900 mb-1">Signed in as</h3><p className="text-sm text-slate-600">{user?.email}</p></div><button onClick={handleSignOut} className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors flex items-center gap-2"><LogOut className="h-4 w-4" /> Sign Out</button></div></div>
-              </div>
+                        );
+                    })}
+                </nav>
             </div>
-          )}
+            <div className="flex-1">
+                {activeTab === 'company' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="p-6 border-b border-gray-100">
+                            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Building2 className="h-5 w-5 text-emerald-600" />Company Information</h2>
+                        </div>
+                        <div className="p-6">
+                            <form onSubmit={handleUpdateCompany} className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label htmlFor="company_name" className="block text-sm font-medium text-slate-700 mb-2">Company Name *</label>
+                                        <input id="company_name" type="text" value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="address" className="block text-sm font-medium text-slate-700 mb-2">Address</label>
+                                        <input id="address" type="text" value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Company address" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label htmlFor="company_currency" className="block text-sm font-medium text-slate-700 mb-2">Currency</label>
+                                    <select id="company_currency" value={companyForm.currency} onChange={(e) => setCompanyForm({ ...companyForm, currency: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
+                                        <option value="USD">USD ($)</option>
+                                        <option value="BDT">BDT (৳)</option>
+                                        <option value="GBP">GBP (£)</option>
+                                        <option value="EUR">EUR (€)</option>
+                                    </select>
+                                    <p className="text-xs text-red-500 mt-1">Note: This only changes the currency symbol. No amounts will be converted.</p>
+                                </div>
+                                <div>
+                                    <label htmlFor="logo_url" className="block text-sm font-medium text-slate-700 mb-2">Logo URL</label>
+                                    <div className="flex gap-3">
+                                        <input id="logo_url" type="url" value={companyForm.logo_url} onChange={(e) => setCompanyForm({ ...companyForm, logo_url: e.target.value })} className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="https://example.com/logo.png" />
+                                        {companyForm.logo_url && (<div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden"><img src={companyForm.logo_url} alt="Logo preview" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} /></div>)}
+                                    </div>
+                                </div>
+                                <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl">{saving ? 'Saving...' : 'Save Changes'}</button></div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'tax' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Calculator className="h-5 w-5 text-emerald-600" />Tax Settings</h2></div>
+                        <div className="p-6">
+                            <form onSubmit={handleUpdateCompany} className="space-y-6">
+                                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-stone-50 rounded-lg">
+                                    <div>
+                                        <h3 className="text-sm font-medium text-slate-900">Enable Tax</h3>
+                                        <p className="text-sm text-slate-600">Automatically apply tax to all bookings</p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer"><input type="checkbox" checked={companyForm.tax_enabled} onChange={(e) => setCompanyForm({ ...companyForm, tax_enabled: e.target.checked })} className="sr-only peer" /><div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div></label>
+                                </div>
+                                {companyForm.tax_enabled && (
+                                    <div>
+                                        <label htmlFor="tax_rate" className="block text-sm font-medium text-slate-700 mb-2">Tax Rate (%)</label>
+                                        <input id="tax_rate" type="number" step="0.01" min="0" max="100" value={companyForm.tax_rate} onChange={(e) => setCompanyForm({ ...companyForm, tax_rate: parseFloat(e.target.value) || 0 })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="0.00" />
+                                        <p className="text-xs text-slate-500 mt-1">Enter the tax percentage to be applied to all bookings.</p>
+                                    </div>
+                                )}
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"><p className="text-sm text-yellow-700"><strong>Note:</strong> Tax will be calculated on the discounted amount and added to the final total for all new bookings.</p></div>
+                                <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl">{saving ? 'Saving...' : 'Save Tax Settings'}</button></div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+                {activeTab === 'team' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="p-6 border-b border-gray-100"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Users className="h-5 w-5 text-emerald-600" />Team Members</h2><button onClick={() => setShowInviteModal(true)} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-2 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-2"><UserPlus className="h-4 w-4" />Invite User</button></div></div>
+                        <div className="p-6">{companyUsers.length === 0 ? (<div className="text-center py-12"><Users className="h-16 w-16 text-gray-300 mx-auto mb-4" /><h3 className="text-lg font-medium text-slate-900 mb-2">No team members yet</h3><p className="text-slate-600">Invite your first team member to get started.</p></div>) : (<div className="space-y-4">{companyUsers.map((companyUser) => (<div key={companyUser.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border"><div className="flex items-center gap-4"><div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center"><span className="text-white text-lg font-semibold">{companyUser.user_email?.charAt(0).toUpperCase() || 'U'}</span></div><div><p className="font-semibold text-slate-900">{companyUser.user_email || 'Unknown User'}</p><div className="flex items-center gap-2"><span className="text-sm text-slate-600 capitalize">{companyUser.role}</span>{companyUser.user_id === user?.id && (<span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full font-medium">You</span>)}</div></div></div>{companyUser.user_id !== user?.id && (<button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="h-5 w-5" /></button>)}</div>))}</div>)}</div>
+                    </div>
+                )}
+                {activeTab === 'email' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Mail className="h-5 w-5 text-emerald-600" />Email Settings</h2></div>
+                        <div className="p-6"><div className="space-y-6"><div><label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label><div className="relative"><Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id="brevo_api_key" type="password" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter your Brevo API key" /></div><p className="text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p></div><div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p></div></div></div>
+                    </div>
+                )}
+                {activeTab === 'payment' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><CreditCard className="h-5 w-5 text-emerald-600" />Payment Method Settings</h2></div>
+                        <div className="p-6"><div className="space-y-6"><div><label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">Stripe Secret Key</label><input id="stripe_secret_key" type="password" value={paymentSettings.stripe_secret_key} onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="sk_test_..."/></div><div><label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">PayPal Client ID</label><input id="paypal_client_id" type="text" value={paymentSettings.paypal_client_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter PayPal Client ID"/></div><div><label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">bKash Merchant ID</label><input id="bkash_merchant_id" type="text" value={paymentSettings.bkash_merchant_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter bKash Merchant ID"/></div><div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"><p className="text-sm text-yellow-700"><strong>Security:</strong> Payment credentials are encrypted and stored securely.</p></div></div></div>
+                    </div>
+                )}
+                {activeTab === 'plans' && (
+                    <div className="space-y-6">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                            <div className="p-6 border-b border-gray-100">
+                                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Crown className="h-5 w-5 text-yellow-600" /> Subscription Plans</h2>
+                                <p className="text-sm text-slate-500 mt-1">Your current plan is: <span className="font-bold text-emerald-600">{companyForm.plan_name}</span></p>
+                            </div>
+                            <div className="p-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {plans.map((plan) => (
+                                        <div key={plan.id} className={`relative rounded-xl border-2 p-6 ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'} transition-all`}>
+                                            {companyForm.plan_name === plan.name && (
+                                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>
+                                            )}
+                                            <div className="text-center">
+                                                <h3 className="text-lg font-semibold text-slate-900 mb-2">{plan.name}</h3>
+                                                <div className="mb-4"><span className="text-3xl font-bold text-slate-900">${plan.price}</span><span className="text-slate-600">/month</span></div>
+                                                <ul className="space-y-2 mb-6 text-sm text-slate-600">
+                                                    <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.room_limit === -1 ? 'Unlimited' : `${plan.room_limit} rooms`}</li>
+                                                    <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
+                                                    <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
+                                                </ul>
+                                                {companyForm.plan_name !== plan.name && (
+                                                    <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait">
+                                                        {isRedirecting ? 'Redirecting...' : 'Upgrade'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                            <div className="p-6 border-b"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Key className="h-5 w-5 text-emerald-600"/> Have an Activation Key?</h2></div>
+                            <form onSubmit={handleActivateKey} className="p-6 space-y-4">
+                                <div><label htmlFor="activation_key" className="block text-sm font-medium text-slate-700 mb-2">Enter your key to upgrade your plan.</label><input id="activation_key" type="text" value={activationKey} onChange={(e) => setActivationKey(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder="PRO-XXXX-XXXX"/></div>
+                                <div className="flex justify-end"><button type="submit" className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700">Activate Plan</button></div>
+                            </form>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                            <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900">Account</h2></div>
+                            <div className="p-6"><div className="flex items-center justify-between"><div><h3 className="text-sm font-medium text-slate-900 mb-1">Signed in as</h3><p className="text-sm text-slate-600">{user?.email}</p></div><button onClick={handleSignOut} className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors flex items-center gap-2"><LogOut className="h-4 w-4" /> Sign Out</button></div></div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
-      </div>
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="p-6 border-b border-gray-100"><h2 className="text-xl font-semibold text-slate-900">Invite Team Member</h2></div>
-            <form onSubmit={handleInviteUser} className="p-6 space-y-4">
-              <div><label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label><div className="relative"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id="invite_email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="colleague@company.com"/></div></div>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> This is a demo feature. In a production environment, this would send an invitation email to the user.</p></div>
-              <div className="flex gap-3 pt-4"><button type="button" onClick={() => { setShowInviteModal(false); setInviteEmail(''); }} className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">Cancel</button><button type="submit" className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl">Send Invitation</button></div>
-            </form>
-          </div>
-        </div>
-      )}
+        {showInviteModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                    <div className="p-6 border-b border-gray-100"><h2 className="text-xl font-semibold text-slate-900">Invite Team Member</h2></div>
+                    <form onSubmit={handleInviteUser} className="p-6 space-y-4">
+                        <div><label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label><div className="relative"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id="invite_email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="colleague@company.com"/></div></div>
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> This is a demo feature. In a production environment, this would send an invitation email to the user.</p></div>
+                        <div className="flex gap-3 pt-4"><button type="button" onClick={() => { setShowInviteModal(false); setInviteEmail(''); }} className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">Cancel</button><button type="submit" className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl">Send Invitation</button></div>
+                    </form>
+                </div>
+            </div>
+        )}
     </div>
   );
 }
