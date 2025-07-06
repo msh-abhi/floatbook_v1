@@ -3,7 +3,7 @@ import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsI
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useCompany } from '../hooks/useCompany';
-import { CompanyUser } from '../types';
+import { CompanyUser, Plan } from '../types'; // Import the Plan type
 import { useLocation, useNavigate } from 'react-router-dom';
 
 export function Settings() {
@@ -17,6 +17,11 @@ export function Settings() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'company' | 'team' | 'email' | 'payment' | 'plans' | 'tax'>('company');
   
+  // --- States for new subscription functionality ---
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [activationKey, setActivationKey] = useState('');
+  // ---------------------------------------------
+
   const [companyForm, setCompanyForm] = useState({
     name: '',
     logo_url: '',
@@ -24,6 +29,7 @@ export function Settings() {
     currency: 'USD',
     tax_enabled: false,
     tax_rate: 0,
+    plan_name: 'Free', // Add plan_name to track current plan
   });
 
   const [emailSettings, setEmailSettings] = useState({
@@ -47,6 +53,7 @@ export function Settings() {
         currency: company.currency || 'USD',
         tax_enabled: company.tax_enabled || false,
         tax_rate: company.tax_rate || 0,
+        plan_name: company.plan_name || 'Free', // Set the plan name from company data
       });
     }
   }, [company]);
@@ -54,6 +61,9 @@ export function Settings() {
   useEffect(() => {
     if (companyId) {
       fetchCompanyUsers();
+      fetchPlans(); // Fetch plans when the component loads
+    } else {
+      setLoading(false);
     }
   }, [companyId]);
   
@@ -70,20 +80,39 @@ export function Settings() {
         .from('company_users')
         .select('*')
         .eq('company_id', companyId);
-
       if (error) throw error;
       setCompanyUsers(data || []);
     } catch (error) {
       console.error('Error fetching company users:', error);
     } finally {
-      setLoading(false);
+      // Only set loading to false if both fetches are done
+      if (plans.length > 0) {
+        setLoading(false);
+      }
     }
   };
+
+  // --- New function to fetch plans from the database ---
+  const fetchPlans = async () => {
+    try {
+      const { data, error } = await supabase.from('plans').select('*').order('price');
+      if (error) throw error;
+      // @ts-ignore
+      setPlans(data || []);
+    } catch(e) {
+      console.error("Error fetching plans", e)
+    } finally {
+      // Only set loading to false if both fetches are done
+      if (companyUsers.length > 0 || !companyId) {
+         setLoading(false);
+      }
+    }
+  };
+  // ----------------------------------------------------
 
   const handleUpdateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-
     try {
       const { error } = await updateCompany({
         name: companyForm.name,
@@ -107,11 +136,38 @@ export function Settings() {
       setSaving(false);
     }
   };
+  
+  // --- New function to handle the activation key submission ---
+  const handleActivateKey = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!activationKey.trim()) {
+          alert("Please enter an activation key.");
+          return;
+      }
+      
+      try {
+          const { data, error } = await supabase.rpc('activate_plan_with_key', {
+              activation_key: activationKey.trim()
+          });
+
+          if (error) throw error;
+
+          // @ts-ignore
+          alert(data.message);
+          // @ts-ignore
+          if (data.success) {
+              window.location.reload(); // Reload to reflect the new plan
+          }
+      } catch (err) {
+          console.error("Activation error:", err);
+          alert("An error occurred during activation.");
+      }
+  };
+  // -----------------------------------------------------------
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !inviteEmail.trim()) return;
-
     try {
       alert(`Invitation would be sent to ${inviteEmail}. This feature requires email service integration.`);
       setInviteEmail('');
@@ -133,15 +189,9 @@ export function Settings() {
     { id: 'company', name: 'Company Info', icon: Building2 },
     { id: 'team', name: 'Team Members', icon: Users },
     { id: 'tax', name: 'Tax Settings', icon: Calculator },
-    { id: 'email', name: 'Email Settings', icon: Mail },
-    { id: 'payment', name: 'Payment Methods', icon: CreditCard },
     { id: 'plans', name: 'Subscription Plans', icon: Crown },
-  ];
-
-  const plans = [
-    { name: 'Free Plan', price: '$0', period: '/month', features: ['2 rooms', '10 bookings/month', 'Basic support'], current: true, color: 'gray' },
-    { name: 'Basic Plan', price: '$29', period: '/month', features: ['10 rooms', '50 bookings/month', 'Email support', 'Analytics'], current: false, color: 'emerald' },
-    { name: 'Pro Plan', price: '$99', period: '/month', features: ['Unlimited rooms', 'Unlimited bookings', 'Priority support', 'Advanced analytics', 'API access'], current: false, color: 'emerald' },
+    { id: 'payment', name: 'Payment Methods', icon: CreditCard },
+    { id: 'email', name: 'Email Settings', icon: Mail },
   ];
 
   if (loading) {
@@ -213,7 +263,6 @@ export function Settings() {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
                       />
                     </div>
-
                     <div>
                       <label htmlFor="address" className="block text-sm font-medium text-slate-700 mb-2">
                         Address
@@ -228,7 +277,6 @@ export function Settings() {
                       />
                     </div>
                   </div>
-
                   <div>
                     <label htmlFor="company_currency" className="block text-sm font-medium text-slate-700 mb-2">
                       Currency
@@ -246,7 +294,6 @@ export function Settings() {
                     </select>
                     <p className="text-xs text-red-500 mt-1">Note: This only changes the currency symbol. No amounts will be converted.</p>
                   </div>
-
                   <div>
                     <label htmlFor="logo_url" className="block text-sm font-medium text-slate-700 mb-2">
                       Logo URL
@@ -274,7 +321,6 @@ export function Settings() {
                       )}
                     </div>
                   </div>
-
                   <div className="flex justify-end">
                     <button
                       type="submit"
@@ -314,7 +360,6 @@ export function Settings() {
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
                     </label>
                   </div>
-
                   {companyForm.tax_enabled && (
                     <div>
                       <label htmlFor="tax_rate" className="block text-sm font-medium text-slate-700 mb-2">
@@ -334,13 +379,11 @@ export function Settings() {
                       <p className="text-xs text-slate-500 mt-1">Enter the tax percentage to be applied to all bookings.</p>
                     </div>
                   )}
-
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-sm text-yellow-700">
                       <strong>Note:</strong> Tax will be calculated on the discounted amount and added to the final total for all new bookings.
                     </p>
                   </div>
-
                   <div className="flex justify-end">
                     <button
                       type="submit"
@@ -363,10 +406,7 @@ export function Settings() {
                     <Users className="h-5 w-5 text-emerald-600" />
                     Team Members
                   </h2>
-                  <button
-                    onClick={() => setShowInviteModal(true)}
-                    className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-2 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-2"
-                  >
+                  <button onClick={() => setShowInviteModal(true)} className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-2 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-2">
                     <UserPlus className="h-4 w-4" />
                     Invite User
                   </button>
@@ -390,15 +430,11 @@ export function Settings() {
                             </span>
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-900">
-                              {companyUser.user_email || 'Unknown User'}
-                            </p>
+                            <p className="font-semibold text-slate-900">{companyUser.user_email || 'Unknown User'}</p>
                             <div className="flex items-center gap-2">
                               <span className="text-sm text-slate-600 capitalize">{companyUser.role}</span>
                               {companyUser.user_id === user?.id && (
-                                <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full font-medium">
-                                  You
-                                </span>
+                                <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full font-medium">You</span>
                               )}
                             </div>
                           </div>
@@ -417,39 +453,22 @@ export function Settings() {
           )}
 
           {activeTab === 'email' && (
-             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <Mail className="h-5 w-5 text-emerald-600" />
-                  Email Settings
-                </h2>
+                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Mail className="h-5 w-5 text-emerald-600" />Email Settings</h2>
               </div>
               <div className="p-6">
                 <div className="space-y-6">
                   <div>
-                    <label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">
-                      Brevo API Key
-                    </label>
+                    <label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label>
                     <div className="relative">
                       <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <input
-                        id="brevo_api_key"
-                        type="password"
-                        value={emailSettings.brevo_api_key}
-                        onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                        placeholder="Enter your Brevo API key"
-                      />
+                      <input id="brevo_api_key" type="password" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter your Brevo API key" />
                     </div>
-                    <p className="text-sm text-slate-500 mt-2">
-                      Used for sending booking confirmations and notifications.
-                    </p>
+                    <p className="text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p>
                   </div>
-
                   <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                    <p className="text-sm text-emerald-700">
-                      <strong>Note:</strong> Email settings are stored securely and used for automated notifications.
-                    </p>
+                    <p className="text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p>
                   </div>
                 </div>
               </div>
@@ -459,59 +478,24 @@ export function Settings() {
           {activeTab === 'payment' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                  <CreditCard className="h-5 w-5 text-emerald-600" />
-                  Payment Method Settings
-                </h2>
+                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><CreditCard className="h-5 w-5 text-emerald-600" />Payment Method Settings</h2>
               </div>
               <div className="p-6">
                 <div className="space-y-6">
                   <div>
-                    <label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">
-                      Stripe Secret Key
-                    </label>
-                    <input
-                      id="stripe_secret_key"
-                      type="password"
-                      value={paymentSettings.stripe_secret_key}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                      placeholder="sk_test_..."
-                    />
+                    <label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">Stripe Secret Key</label>
+                    <input id="stripe_secret_key" type="password" value={paymentSettings.stripe_secret_key} onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="sk_test_..."/>
                   </div>
-
                   <div>
-                    <label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">
-                      PayPal Client ID
-                    </label>
-                    <input
-                      id="paypal_client_id"
-                      type="text"
-                      value={paymentSettings.paypal_client_id}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                      placeholder="Enter PayPal Client ID"
-                    />
+                    <label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">PayPal Client ID</label>
+                    <input id="paypal_client_id" type="text" value={paymentSettings.paypal_client_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter PayPal Client ID"/>
                   </div>
-
                   <div>
-                    <label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">
-                      bKash Merchant ID
-                    </label>
-                    <input
-                      id="bkash_merchant_id"
-                      type="text"
-                      value={paymentSettings.bkash_merchant_id}
-                      onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                      placeholder="Enter bKash Merchant ID"
-                    />
+                    <label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">bKash Merchant ID</label>
+                    <input id="bkash_merchant_id" type="text" value={paymentSettings.bkash_merchant_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter bKash Merchant ID"/>
                   </div>
-
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-sm text-yellow-700">
-                      <strong>Security:</strong> Payment credentials are encrypted and stored securely.
-                    </p>
+                    <p className="text-sm text-yellow-700"><strong>Security:</strong> Payment credentials are encrypted and stored securely.</p>
                   </div>
                 </div>
               </div>
@@ -522,56 +506,29 @@ export function Settings() {
             <div className="space-y-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                 <div className="p-6 border-b border-gray-100">
-                  <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                    <Crown className="h-5 w-5 text-yellow-600" />
-                    Subscription Plans
-                  </h2>
+                  <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Crown className="h-5 w-5 text-yellow-600" /> Subscription Plans</h2>
+                  <p className="text-sm text-slate-500 mt-1">Your current plan is: <span className="font-bold text-emerald-600">{company?.plan_name || 'Free'}</span></p>
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {plans.map((plan) => (
-                      <div
-                        key={plan.name}
-                        className={`relative rounded-xl border-2 p-6 ${
-                          plan.current
-                            ? 'border-emerald-500 bg-emerald-50'
-                            : 'border-gray-200 bg-white hover:border-gray-300'
-                        } transition-all`}
-                      >
-                        {plan.current && (
-                          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                            <span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">
-                              Current Plan
-                            </span>
-                          </div>
+                      <div key={plan.name} className={`relative rounded-xl border-2 p-6 ${company?.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'} transition-all`}>
+                        {company?.plan_name === plan.name && (
+                          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>
                         )}
-                        
                         <div className="text-center">
                           <h3 className="text-lg font-semibold text-slate-900 mb-2">{plan.name}</h3>
                           <div className="mb-4">
-                            <span className="text-3xl font-bold text-slate-900">{plan.price}</span>
-                            <span className="text-slate-600">{plan.period}</span>
+                            <span className="text-3xl font-bold text-slate-900">${plan.price}</span>
+                            <span className="text-slate-600">/month</span>
                           </div>
-                          
                           <ul className="space-y-2 mb-6 text-sm text-slate-600">
-                            {plan.features.map((feature, index) => (
-                              <li key={index} className="flex items-center gap-2">
-                                <Zap className="h-4 w-4 text-emerald-500" />
-                                {feature}
-                              </li>
-                            ))}
+                              <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.room_limit === -1 ? 'Unlimited' : `${plan.room_limit} rooms`}</li>
+                              <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
+                              <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
                           </ul>
-                          
-                          {!plan.current && (
-                            <button
-                              className={`w-full py-2 px-4 rounded-xl font-medium transition-all ${
-                                plan.color === 'emerald'
-                                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                  : 'bg-gray-600 text-white hover:bg-gray-700'
-                              }`}
-                            >
-                              Upgrade
-                            </button>
+                          {company?.plan_name !== plan.name && (
+                            <button className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700">Upgrade</button>
                           )}
                         </div>
                       </div>
@@ -580,23 +537,29 @@ export function Settings() {
                 </div>
               </div>
 
-              {/* Account Section */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-6 border-b border-gray-100">
-                  <h2 className="text-lg font-semibold text-slate-900">Account</h2>
-                </div>
+                <div className="p-6 border-b"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Key className="h-5 w-5 text-emerald-600"/> Have an Activation Key?</h2></div>
+                <form onSubmit={handleActivateKey} className="p-6 space-y-4">
+                  <div>
+                    <label htmlFor="activation_key" className="block text-sm font-medium text-slate-700 mb-2">Enter your key to upgrade your plan.</label>
+                    <input id="activation_key" type="text" value={activationKey} onChange={(e) => setActivationKey(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder="PRO-XXXX-XXXX"/>
+                  </div>
+                  <div className="flex justify-end">
+                    <button type="submit" className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700">Activate Plan</button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+                <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900">Account</h2></div>
                 <div className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-medium text-slate-900 mb-1">Signed in as</h3>
                       <p className="text-sm text-slate-600">{user?.email}</p>
                     </div>
-                    <button
-                      onClick={handleSignOut}
-                      className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors flex items-center gap-2"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Sign Out
+                    <button onClick={handleSignOut} className="bg-red-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors flex items-center gap-2">
+                      <LogOut className="h-4 w-4" /> Sign Out
                     </button>
                   </div>
                 </div>
@@ -609,53 +572,21 @@ export function Settings() {
       {showInviteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-semibold text-slate-900">Invite Team Member</h2>
-            </div>
-
+            <div className="p-6 border-b border-gray-100"><h2 className="text-xl font-semibold text-slate-900">Invite Team Member</h2></div>
             <form onSubmit={handleInviteUser} className="p-6 space-y-4">
               <div>
-                <label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">
-                  Email Address
-                </label>
+                <label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-                  <input
-                    id="invite_email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    required
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                    placeholder="colleague@company.com"
-                  />
+                  <input id="invite_email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="colleague@company.com"/>
                 </div>
               </div>
-
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                <p className="text-sm text-emerald-700">
-                  <strong>Note:</strong> This is a demo feature. In a production environment,
-                  this would send an invitation email to the user.
-                </p>
+                <p className="text-sm text-emerald-700"><strong>Note:</strong> This is a demo feature. In a production environment, this would send an invitation email to the user.</p>
               </div>
-
               <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowInviteModal(false);
-                    setInviteEmail('');
-                  }}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  Send Invitation
-                </button>
+                <button type="button" onClick={() => { setShowInviteModal(false); setInviteEmail(''); }} className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl">Send Invitation</button>
               </div>
             </form>
           </div>
