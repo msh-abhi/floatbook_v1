@@ -1,0 +1,7 @@
+-- Add an 'is_active' column to the companies table to allow disabling.
+ALTER TABLE public.companies
+ADD COLUMN is_active boolean NOT NULL DEFAULT true;
+
+-- Add an 'is_active' column to the users table to allow disabling.
+ALTER TABLE public.users
+ADD COLUMN is_active boolean NOT NULL DEFAULT true;
