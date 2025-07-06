@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, DollarSign, Search, Eye, Edit, Trash2, Mail, X } from 'lucide-react';
+import { Building2, Users, Calendar, DollarSign, Search, Eye, Edit, Trash2, Crown, MapPin, Mail, X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Company as BaseCompany, CompanyUser } from '../../types';
 
@@ -36,19 +36,15 @@ export function ManageCompanies() {
     try {
       setLoading(true);
 
-      // 1. Fetch all companies
       const { data: companiesData, error: companiesError } = await supabase.from('companies').select('*').order('created_at', { ascending: false });
       if (companiesError) throw companiesError;
 
-      // 2. Fetch all users and their company roles
       const { data: companyUsersData, error: usersError } = await supabase.from('company_users').select('company_id, user_email, role');
       if (usersError) throw usersError;
 
-      // 3. Fetch all bookings
       const { data: bookingsData, error: bookingsError } = await supabase.from('bookings').select('company_id, total_amount');
       if (bookingsError) throw bookingsError;
 
-      // 4. Process all data in-memory for efficiency
       const statsMap = new Map<string, { user_count: number; admin_email?: string; booking_count: number; total_revenue: number }>();
 
       companyUsersData?.forEach(user => {
@@ -67,12 +63,10 @@ export function ManageCompanies() {
         statsMap.set(booking.company_id, stat);
       });
 
-      // 5. Combine data
       const companiesWithStats = (companiesData || []).map(company => ({
         ...company,
         ...statsMap.get(company.id),
       }));
-
       // @ts-ignore
       setCompanies(companiesWithStats);
     } catch (error) {
@@ -81,10 +75,13 @@ export function ManageCompanies() {
       setLoading(false);
     }
   };
-
+  
   const handleViewDetails = async (company: Company) => {
     const { data: users, error } = await supabase.from('company_users').select('*').eq('company_id', company.id);
-    if (error) { console.error("Failed to fetch users for company"); return; }
+    if (error) {
+      console.error("Failed to fetch users for company");
+      return;
+    }
     setSelectedCompany({ ...company, users: users || [] });
     setShowDetailModal(true);
   };
@@ -94,7 +91,7 @@ export function ManageCompanies() {
     setEditForm({ name: company.name, address: company.address || '' });
     setShowEditModal(true);
   };
-
+  
   const handleUpdateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCompany) return;
@@ -104,17 +101,17 @@ export function ManageCompanies() {
     } else {
       setShowEditModal(false);
       setEditingCompany(null);
-      fetchCompanies(); // Refresh data
+      fetchCompanies();
     }
   };
-
+  
   const handleToggleCompanyStatus = async (company: Company) => {
     const newStatus = !company.is_active;
     const { error } = await supabase.from('companies').update({ is_active: newStatus }).eq('id', company.id);
     if (error) {
       alert("Failed to update company status.");
     } else {
-      fetchCompanies(); // Refresh data
+      fetchCompanies();
     }
   };
 
@@ -124,7 +121,7 @@ export function ManageCompanies() {
     if (error) {
       alert('Error deleting company.');
     } else {
-      fetchCompanies(); // Refresh data
+      fetchCompanies();
     }
   };
 
@@ -140,6 +137,8 @@ export function ManageCompanies() {
     <div className="p-4 lg:p-8 max-w-7xl mx-auto">
       <h1 className="text-3xl font-bold text-slate-900 mb-6">Manage Companies</h1>
       
+      {/* Search and other header elements here */}
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
            <table className="w-full text-left">
@@ -170,6 +169,10 @@ export function ManageCompanies() {
                         <Users className="h-4 w-4 text-slate-400" />
                         <span>{company.user_count || 0} users</span>
                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Calendar className="h-4 w-4 text-slate-400" />
+                        <span>{company.booking_count || 0} bookings</span>
+                     </div>
                      <div className="flex items-center gap-2">
                         <DollarSign className="h-4 w-4 text-slate-400" />
                         <span>{formatCurrency(company.total_revenue || 0, company.currency)}</span>
@@ -195,6 +198,7 @@ export function ManageCompanies() {
         </div>
       </div>
       
+      {/* Edit Modal */}
       {showEditModal && editingCompany && (
          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
@@ -217,26 +221,107 @@ export function ManageCompanies() {
         </div>
       )}
       
+      {/* THIS IS THE CORRECTED DETAIL MODAL */}
       {showDetailModal && selectedCompany && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center p-4 z-50">
-           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b"><h2 className="text-xl font-semibold">{selectedCompany.name} Details</h2></div>
-              <div className="p-6 space-y-6">
-                {/* Basic Info */}
-                <div>
-                    <h3 className="text-lg font-medium text-slate-900 mb-4">Users ({selectedCompany.users.length})</h3>
-                    <div className="space-y-2">
-                    {selectedCompany.users.map(user => (
-                        <div key={user.id} className="flex justify-between items-center p-2 bg-gray-50 rounded-md">
-                        <span className="text-sm">{user.user_email}</span>
-                        <span className="text-xs font-semibold uppercase text-slate-500">{user.role}</span>
-                        </div>
-                    ))}
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-slate-900">Company Details</h2>
+              <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-gray-100 rounded-lg"><X className="h-5 w-5"/></button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Basic Info */}
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-4">Basic Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Company Name</label>
+                    <p className="text-slate-900">{selectedCompany.name}</p>
+                  </div>
+                   <div>
+                    <label className="block font-medium text-slate-700 mb-1">Admin Email</label>
+                    <p className="text-slate-900">{selectedCompany.admin_email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Currency</label>
+                    <p className="text-slate-900">{selectedCompany.currency}</p>
+                  </div>
+                  {selectedCompany.address && (
+                    <div className="md:col-span-2">
+                      <label className="block font-medium text-slate-700 mb-1">Address</label>
+                      <p className="text-slate-900">{selectedCompany.address}</p>
                     </div>
+                  )}
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Created</label>
+                    <p className="text-slate-900">{formatDate(selectedCompany.created_at)}</p>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Company ID</label>
+                    <p className="text-slate-500 font-mono">{selectedCompany.id}</p>
+                  </div>
                 </div>
               </div>
-              <div className="p-6 border-t"><button onClick={() => setShowDetailModal(false)} className="px-6 py-2 bg-slate-600 text-white rounded-lg">Close</button></div>
-           </div>
+
+              {/* Tax Settings */}
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-4">Tax Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Tax Enabled</label>
+                    <p className="text-slate-900">{selectedCompany.tax_enabled ? 'Yes' : 'No'}</p>
+                  </div>
+                  {selectedCompany.tax_enabled && (
+                    <div>
+                      <label className="block font-medium text-slate-700 mb-1">Tax Rate</label>
+                      <p className="text-slate-900">{selectedCompany.tax_rate}%</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Statistics */}
+              <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-4">Statistics</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-slate-700 mb-1">Users</p>
+                    <p className="text-2xl font-bold text-slate-900">{selectedCompany.user_count || 0}</p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-slate-700 mb-1">Bookings</p>
+                    <p className="text-2xl font-bold text-slate-900">{selectedCompany.booking_count || 0}</p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm font-medium text-slate-700 mb-1">Revenue</p>
+                    <p className="text-2xl font-bold text-slate-900">
+                      {formatCurrency(selectedCompany.total_revenue || 0, selectedCompany.currency)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* User List */}
+               <div>
+                <h3 className="text-lg font-medium text-slate-900 mb-4">Users in Company</h3>
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                  {selectedCompany.users.length > 0 ? selectedCompany.users.map(user => (
+                    <div key={user.id} className="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                      <span className="text-sm">{user.user_email}</span>
+                      <span className="text-xs font-semibold uppercase text-slate-500">{user.role}</span>
+                    </div>
+                  )) : <p className="text-sm text-slate-500">No users found for this company.</p>}
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-100 bg-gray-50 text-right">
+              <button onClick={() => setShowDetailModal(false)} className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium">
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
