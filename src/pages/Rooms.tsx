@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { DoorOpen, Plus, Edit, Trash2, Users, CircleDollarSign, Wifi, Coffee, Car, Utensils } from 'lucide-react';
+import { DoorOpen, Plus, Edit, Trash2, Users, CircleDollarSign, Wifi, Coffee, Car, Utensils, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useCompany } from '../hooks/useCompany';
 import { Room } from '../types';
 import { formatCurrency } from '../utils/currency';
+import { useSubscription } from '../hooks/useSubscription'; // Import the new hook
 
 export function Rooms() {
   const { companyId } = useAuth();
   const { company } = useCompany(companyId);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingRooms, setLoadingRooms] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [formData, setFormData] = useState({
@@ -21,31 +22,24 @@ export function Rooms() {
     meal_options: 'None',
   });
 
+  // --- New subscription logic ---
+  const { plan, loading: loadingSubscription } = useSubscription();
+  const roomLimit = plan?.room_limit ?? 2; // Default to 2 for safety (Free plan limit)
+  const limitReached = roomLimit !== -1 && rooms.length >= roomLimit;
+  const loading = loadingRooms || loadingSubscription;
+  // -----------------------------
+
   const availableAmenities = [
-    'WiFi',
-    'Balcony', 
-    'Life Jackets',
-    'AC',
-    'Heater',
-    'TV',
-    'Mini Bar',
-    'Ocean View',
-    'Parking',
-    'Room Service'
+    'WiFi', 'Balcony', 'Life Jackets', 'AC', 'Heater', 'TV', 'Mini Bar', 'Ocean View', 'Parking', 'Room Service'
   ];
 
-  const mealOptions = [
-    'None',
-    'Full board',
-    'Half board',
-    'Breakfast only',
-    'Lunch only',
-    'Dinner only'
-  ];
+  const mealOptions = [ 'None', 'Full board', 'Half board', 'Breakfast only', 'Lunch only', 'Dinner only' ];
 
   useEffect(() => {
     if (companyId) {
       fetchRooms();
+    } else {
+        setLoadingRooms(false);
     }
   }, [companyId]);
 
@@ -53,6 +47,7 @@ export function Rooms() {
     if (!companyId) return;
 
     try {
+      setLoadingRooms(true);
       const { data, error } = await supabase
         .from('rooms')
         .select('*')
@@ -64,13 +59,19 @@ export function Rooms() {
     } catch (error) {
       console.error('Error fetching rooms:', error);
     } finally {
-      setLoading(false);
+      setLoadingRooms(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId) return;
+
+    // Add a final check before submitting
+    if (!editingRoom && limitReached) {
+      alert(`You have reached your room limit for the ${plan?.name} plan.`);
+      return;
+    }
 
     try {
       const roomData = {
@@ -87,13 +88,11 @@ export function Rooms() {
           .from('rooms')
           .update(roomData)
           .eq('id', editingRoom.id);
-
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('rooms')
           .insert([roomData]);
-
         if (error) throw error;
       }
 
@@ -128,7 +127,6 @@ export function Rooms() {
         .from('rooms')
         .delete()
         .eq('id', roomId);
-
       if (error) throw error;
       fetchRooms();
     } catch (error) {
@@ -146,6 +144,10 @@ export function Rooms() {
   };
 
   const openModal = () => {
+    if (limitReached) {
+      alert(`You have reached your room limit for the ${plan?.name || 'Free'} plan. Please upgrade to add more rooms.`);
+      return;
+    }
     setEditingRoom(null);
     setFormData({ name: '', price: '', capacity: '1', amenities: [], meal_options: 'None' });
     setShowModal(true);
@@ -189,12 +191,26 @@ export function Rooms() {
         </div>
         <button
           onClick={openModal}
-          className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-2 self-start"
+          disabled={limitReached}
+          className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-2 self-start disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed disabled:shadow-none"
         >
           <Plus className="h-5 w-5" />
           Add Room
         </button>
       </div>
+
+      {/* NEW: Limit Reached Warning Banner */}
+      {limitReached && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 p-4 mb-6 rounded-r-lg shadow" role="alert">
+          <div className="flex">
+            <div className="py-1"><AlertCircle className="h-5 w-5 text-yellow-600 mr-3"/></div>
+            <div>
+              <p className="font-bold">Room Limit Reached</p>
+              <p className="text-sm">You have created {rooms.length} of {roomLimit} rooms available on the <strong>{plan?.name}</strong> plan. Please upgrade to add more.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rooms Grid */}
       {rooms.length === 0 ? (
@@ -204,7 +220,8 @@ export function Rooms() {
           <p className="text-slate-600 mb-6">Get started by adding your first room.</p>
           <button
             onClick={openModal}
-            className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+            disabled={limitReached}
+            className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed disabled:shadow-none"
           >
             Add Your First Room
           </button>
@@ -306,112 +323,43 @@ export function Rooms() {
                 {editingRoom ? 'Edit Room' : 'Add New Room'}
               </h2>
             </div>
-
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1">
-                    Room Name *
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                    placeholder="e.g. Conference Room A"
-                  />
+                  <label htmlFor="name" className="block text-sm font-medium text-slate-700 mb-1">Room Name *</label>
+                  <input id="name" type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="e.g. Conference Room A"/>
                 </div>
-
                 <div>
-                  <label htmlFor="capacity" className="block text-sm font-medium text-slate-700 mb-1">
-                    Capacity (People) *
-                  </label>
-                  <input
-                    id="capacity"
-                    type="number"
-                    min="1"
-                    value={formData.capacity}
-                    onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                    placeholder="1"
-                  />
+                  <label htmlFor="capacity" className="block text-sm font-medium text-slate-700 mb-1">Capacity (People) *</label>
+                  <input id="capacity" type="number" min="1" value={formData.capacity} onChange={(e) => setFormData({ ...formData, capacity: e.target.value })} required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="1"/>
                 </div>
               </div>
-
               <div>
-                <label htmlFor="price" className="block text-sm font-medium text-slate-700 mb-1">
-                  Price per Booking ({company?.currency}) *
-                </label>
-                <input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.price}
-                  onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                  placeholder="0.00"
-                />
+                <label htmlFor="price" className="block text-sm font-medium text-slate-700 mb-1">Price per Booking ({company?.currency}) *</label>
+                <input id="price" type="number" step="0.01" min="0" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="0.00"/>
               </div>
-
               <div>
-                <label htmlFor="meal_options" className="block text-sm font-medium text-slate-700 mb-1">
-                  Meal Options
-                </label>
-                <select
-                  id="meal_options"
-                  value={formData.meal_options}
-                  onChange={(e) => setFormData({ ...formData, meal_options: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                >
+                <label htmlFor="meal_options" className="block text-sm font-medium text-slate-700 mb-1">Meal Options</label>
+                <select id="meal_options" value={formData.meal_options} onChange={(e) => setFormData({ ...formData, meal_options: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all">
                   {mealOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                    <option key={option} value={option}>{option}</option>
                   ))}
                 </select>
               </div>
-
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-3">
-                  Amenities
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-3">Amenities</label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {availableAmenities.map((amenity) => (
                     <label key={amenity} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.amenities.includes(amenity)}
-                        onChange={() => handleAmenityToggle(amenity)}
-                        className="w-4 h-4 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
-                      />
-                      <span className="text-sm text-slate-700 flex items-center gap-1">
-                        {getAmenityIcon(amenity)}
-                        {amenity}
-                      </span>
+                      <input type="checkbox" checked={formData.amenities.includes(amenity)} onChange={() => handleAmenityToggle(amenity)} className="w-4 h-4 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"/>
+                      <span className="text-sm text-slate-700 flex items-center gap-1">{getAmenityIcon(amenity)}{amenity}</span>
                     </label>
                   ))}
                 </div>
               </div>
-
               <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl"
-                >
-                  {editingRoom ? 'Update Room' : 'Add Room'}
-                </button>
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">Cancel</button>
+                <button type="submit" className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl">{editingRoom ? 'Update Room' : 'Add Room'}</button>
               </div>
             </form>
           </div>
