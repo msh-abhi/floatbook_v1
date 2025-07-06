@@ -94,3 +94,13 @@ export interface BookingFilters {
   query: string;
   paymentStatus: 'all' | 'paid' | 'unpaid';
 }
+
+export interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  room_limit: number;
+  booking_limit: number;
+  user_limit: number;
+  stripe_price_id?: string;
+}
