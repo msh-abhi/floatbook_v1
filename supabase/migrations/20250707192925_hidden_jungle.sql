@@ -18,11 +18,11 @@
 -- IMPORTANT: Replace these with your actual Stripe Price IDs from your dashboard
 
 UPDATE plans 
-SET stripe_price_id = 'price_1234567890abcdef' -- Replace with your actual Basic plan price ID
+SET stripe_price_id = 'price_1RhpvJ07JeDHYnbEwlW6Xxpk' -- Replace with your actual Basic plan price ID
 WHERE name = 'Basic';
 
 UPDATE plans 
-SET stripe_price_id = 'price_0987654321fedcba' -- Replace with your actual Pro plan price ID  
+SET stripe_price_id = 'price_1Rhpw907JeDHYnbEGxS4hPW6' -- Replace with your actual Pro plan price ID  
 WHERE name = 'Pro';
 
 -- The Free plan should remain NULL for stripe_price_id since it's free
