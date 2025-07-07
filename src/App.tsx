@@ -12,6 +12,7 @@ import { useAuth } from './hooks/useAuth';
 import { ManageUsers } from './pages/admin/ManageUsers';
 import { ManagePlans } from './pages/admin/ManagePlans';
 import { ManageKeys } from './pages/admin/ManageKeys'; // New import
+import { StripeSuccessHandler } from './components/StripeSuccessHandler';
 
 // Lazy load other pages
 const Bookings = React.lazy(() => import('./pages/Bookings').then(module => ({ default: module.Bookings })));
@@ -45,6 +46,7 @@ function App() {
         <Routes>
           <Route path="/auth" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="/stripe/success" element={<StripeSuccessHandler />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="companies" element={<ManageCompanies />} />
@@ -108,6 +110,7 @@ function App() {
         </Route>
         {/* Redirect admin routes to regular dashboard for non-superadmin users */}
         <Route path="/admin/*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/stripe/success" element={<StripeSuccessHandler />} />
       </Routes>
     </Router>
   );

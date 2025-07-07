@@ -20,9 +20,7 @@ export function Settings() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activationKey, setActivationKey] = useState('');
   
-  // --- THIS IS THE MISSING LINE THAT CAUSED THE CRASH ---
   const [isRedirecting, setIsRedirecting] = useState(false);
-  // ----------------------------------------------------
 
   const [companyForm, setCompanyForm] = useState({
     name: '',
@@ -165,35 +163,35 @@ export function Settings() {
   
   const handleStripeUpgrade = async (priceId: string | undefined) => {
     if (!priceId) {
-        alert('This plan is not configured for Stripe payments yet.');
-        return;
+      alert('This plan is not configured for Stripe payments yet.');
+      return;
     }
 
     setIsRedirecting(true);
     try {
-        const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
-            body: { price_id: priceId },
-        });
+      const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
+        body: { price_id: priceId },
+      });
 
-        if (error) {
-            throw new Error(`Edge Function invocation failed: ${error.message}`);
-        }
+      if (error) {
+        throw new Error(`Edge Function invocation failed: ${error.message}`);
+      }
 
-        if (data.error) {
-            throw new Error(`Stripe Error: ${data.error}`);
-        }
-        
-        if (data.checkout_url) {
-            window.location.href = data.checkout_url;
-        } else {
-            console.error("Unexpected response from checkout function:", data);
-            throw new Error("Could not create a checkout session. Please try again.");
-        }
+      if (data.error) {
+        throw new Error(`Stripe Error: ${data.error}`);
+      }
+      
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        console.error("Unexpected response from checkout function:", data);
+        throw new Error("Could not create a checkout session. Please try again.");
+      }
 
     } catch (error: any) {
-        console.error("Stripe upgrade process failed:", error);
-        alert('Error starting subscription: ' + error.message);
-        setIsRedirecting(false);
+      console.error("Stripe upgrade process failed:", error);
+      alert('Error starting subscription: ' + error.message);
+      setIsRedirecting(false);
     }
   };
 

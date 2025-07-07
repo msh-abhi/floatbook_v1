@@ -43,9 +43,8 @@ serve(async (req)=>{
         }
       ],
       mode: 'subscription',
-      // Make sure to set these success and cancel URLs in your Supabase UI
-      success_url: `${Deno.env.get('SUPABASE_SITE_URL')}/settings?tab=plans`,
-      cancel_url: `${Deno.env.get('SUPABASE_SITE_URL')}/settings?tab=plans`,
+      success_url: `${Deno.env.get('SUPABASE_SITE_URL')}/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${Deno.env.get('SUPABASE_SITE_URL')}/settings?tab=plans&canceled=true`,
       subscription_data: {
         metadata: {
           company_id: companyUser.company_id

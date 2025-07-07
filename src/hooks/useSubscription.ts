@@ -1,4 +1,3 @@
-// In src/hooks/useSubscription.ts
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plan, Subscription } from '../types';
@@ -30,7 +29,7 @@ export function useSubscription(): SubscriptionData {
 
     try {
       setLoading(true);
-      // Fetches the most recent active subscription.
+      // Fetch the most recent active subscription
       const { data, error } = await supabase
         .from('subscriptions')
         .select(`
@@ -48,19 +47,17 @@ export function useSubscription(): SubscriptionData {
       }
       
       if (data) {
-        // @ts-ignore
         setSubscription(data);
-        // @ts-ignore
-        setPlan(data.plans);
+        setPlan(data.plans as Plan);
       } else {
-        // If no active subscription, fetch the default 'Free' plan as a fallback
+        // If no active subscription, fetch the default 'Free' plan
         const { data: freePlan, error: freePlanError } = await supabase
           .from('plans')
           .select('*')
           .eq('name', 'Free')
           .single();
         
-        if(freePlanError) throw freePlanError;
+        if (freePlanError) throw freePlanError;
         setPlan(freePlan);
       }
     } catch (error) {
