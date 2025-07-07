@@ -24,7 +24,7 @@ export function StripeSuccessHandler() {
       
       // Redirect to settings after 3 seconds
       setTimeout(() => {
-        navigate('/settings?tab=plans');
+        navigate('/settings', { state: { tab: 'plans' } });
       }, 3000);
     }, 2000);
 
@@ -63,7 +63,7 @@ export function StripeSuccessHandler() {
             <h1 className="text-2xl font-bold text-slate-900 mb-2">Something went wrong</h1>
             <p className="text-slate-600 mb-4">{message}</p>
             <button
-              onClick={() => navigate('/settings?tab=plans')}
+              onClick={() => navigate('/settings', { state: { tab: 'plans' } })}
               className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
             >
               Go to Settings
