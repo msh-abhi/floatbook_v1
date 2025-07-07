@@ -11,7 +11,7 @@ import { ManageCompanies } from './pages/admin/ManageCompanies';
 import { useAuth } from './hooks/useAuth';
 import { ManageUsers } from './pages/admin/ManageUsers';
 import { ManagePlans } from './pages/admin/ManagePlans';
-import { ManageKeys } from './pages/admin/ManageKeys'; // New import
+import { ManageKeys } from './pages/admin/ManageKeys';
 import { StripeSuccessHandler } from './components/StripeSuccessHandler';
 
 // Lazy load other pages
@@ -52,7 +52,7 @@ function App() {
             <Route path="companies" element={<ManageCompanies />} />
             <Route path="users" element={<ManageUsers />} />
             <Route path="plans" element={<ManagePlans />} />
-            <Route path="keys" element={<ManageKeys />} /> {/* New route */}
+            <Route path="keys" element={<ManageKeys />} />
             <Route path="settings" element={<div className="p-8"><h1 className="text-2xl font-bold">Admin Settings</h1><p className="text-slate-600 mt-2">Coming soon...</p></div>} />
           </Route>
           {/* Redirect any non-admin routes to admin dashboard */}
@@ -72,6 +72,10 @@ function App() {
       <Routes>
         <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        
+        {/* The new route is correctly placed here */}
+        <Route path="/stripe/success" element={<StripeSuccessHandler />} />
+
         <Route path="/" element={<Layout />}>
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="rooms" element={<Rooms />} />
@@ -110,7 +114,6 @@ function App() {
         </Route>
         {/* Redirect admin routes to regular dashboard for non-superadmin users */}
         <Route path="/admin/*" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/stripe/success" element={<StripeSuccessHandler />} />
       </Routes>
     </Router>
   );
