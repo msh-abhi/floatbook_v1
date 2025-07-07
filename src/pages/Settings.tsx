@@ -155,12 +155,13 @@ export function Settings() {
       } else {
         throw new Error("Received an unexpected response from the server.");
       }
+
     } catch (err: any) {
       console.error("Activation error:", err);
       alert(`Activation Failed: ${err.message}`);
     }
   };
-  
+
   const handleStripeUpgrade = async (priceId: string | undefined) => {
     if (!priceId) {
       alert('This plan is not configured for Stripe payments yet.');
@@ -340,14 +341,45 @@ export function Settings() {
           {activeTab === 'email' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Mail className="h-5 w-5 text-emerald-600" />Email Settings</h2></div>
-              <div className="p-6"><div className="space-y-6"><div><label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label><div className="relative"><Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id=\"brevo_api_key\" type="password\" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className=\"w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all\" placeholder=\"Enter your Brevo API key" /></div><p className=\"text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p></div><div className=\"bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className=\"text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p></div></div></div>
-              <div className="p-6"><div className="space-y-6"><div><label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label><div className="relative"><Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id=\"brevo_api_key" type="password\" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all\" placeholder="Enter your Brevo API key" /></div><p className="text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p></div><div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p></div></div></div>
+              <div className="p-6">
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
+                      <input id="brevo_api_key" type="password" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter your Brevo API key" />
+                    </div>
+                    <p className="text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p>
+                  </div>
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                    <p className="text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           {activeTab === 'payment' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><CreditCard className="h-5 w-5 text-emerald-600" />Payment Method Settings</h2></div>
-              <div className="p-6"><div className="space-y-6"><div><label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">Stripe Secret Key</label><input id="stripe_secret_key" type="password" value={paymentSettings.stripe_secret_key} onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="sk_test_..."/></div><div><label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">PayPal Client ID</label><input id="paypal_client_id" type="text" value={paymentSettings.paypal_client_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter PayPal Client ID"/></div><div><label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">bKash Merchant ID</label><input id="bkash_merchant_id" type="text" value={paymentSettings.bkash_merchant_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter bKash Merchant ID"/></div><div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"><p className="text-sm text-yellow-700"><strong>Security:</strong> Payment credentials are encrypted and stored securely.</p></div></div></div>
+              <div className="p-6">
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">Stripe Secret Key</label>
+                    <input id="stripe_secret_key" type="password" value={paymentSettings.stripe_secret_key} onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="sk_test_..."/>
+                  </div>
+                  <div>
+                    <label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">PayPal Client ID</label>
+                    <input id="paypal_client_id" type="text" value={paymentSettings.paypal_client_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter PayPal Client ID"/>
+                  </div>
+                  <div>
+                    <label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">bKash Merchant ID</label>
+                    <input id="bkash_merchant_id" type="text" value={paymentSettings.bkash_merchant_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter bKash Merchant ID"/>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-sm text-yellow-700"><strong>Security:</strong> Payment credentials are encrypted and stored securely.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           {activeTab === 'plans' && (
@@ -385,12 +417,10 @@ export function Settings() {
               </div>
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                 <div className="p-6 border-b"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Key className="h-5 w-5 text-emerald-600"/> Have an Activation Key?</h2></div>
-                <div className="p-6">
-                  <form onSubmit={handleActivateKey} className="space-y-4">
-                    <div><label htmlFor="activation_key" className="block text-sm font-medium text-slate-700 mb-2">Enter your key to upgrade your plan.</label><input id="activation_key" type="text" value={activationKey} onChange={(e) => setActivationKey(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder="PRO-XXXX-XXXX"/></div>
-                    <div className="flex justify-end"><button type="submit" className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700">Activate Plan</button></div>
-                  </form>
-                </div>
+                <form onSubmit={handleActivateKey} className="p-6 space-y-4">
+                  <div><label htmlFor="activation_key" className="block text-sm font-medium text-slate-700 mb-2">Enter your key to upgrade your plan.</label><input id="activation_key" type="text" value={activationKey} onChange={(e) => setActivationKey(e.target.value)} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder="PRO-XXXX-XXXX"/></div>
+                  <div className="flex justify-end"><button type="submit" className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-6 py-3 rounded-lg font-medium hover:from-emerald-700">Activate Plan</button></div>
+                </form>
               </div>
               <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                 <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900">Account</h2></div>
@@ -405,7 +435,7 @@ export function Settings() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="p-6 border-b border-gray-100"><h2 className="text-xl font-semibold text-slate-900">Invite Team Member</h2></div>
             <form onSubmit={handleInviteUser} className="p-6 space-y-4">
-              <div><label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label><div className="relative"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id=\"invite_email" type="email\" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all\" placeholder="colleague@company.com"/></div></div>
+              <div><label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label><div className="relative"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id="invite_email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="colleague@company.com"/></div></div>
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> This is a demo feature. In a production environment, this would send an invitation email to the user.</p></div>
               <div className="flex gap-3 pt-4"><button type="button" onClick={() => { setShowInviteModal(false); setInviteEmail(''); }} className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">Cancel</button><button type="submit" className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl">Send Invitation</button></div>
             </form>
