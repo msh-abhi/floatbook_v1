@@ -1,35 +1,40 @@
+// src/components/StripeSuccessHandler.tsx
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth'; // Import useAuth
 
 export function StripeSuccessHandler() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
+  const { refreshCompany } = useAuth(); // Get the refresh function
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
     
     if (!sessionId) {
       setStatus('error');
-      setMessage('No session ID found in URL');
+      setMessage('No session ID found in URL. Cannot confirm subscription status.');
       return;
     }
 
-    // Give the webhook a moment to process
-    const timer = setTimeout(() => {
+    // Give the webhook time to process, then refresh data and redirect.
+    const timer = setTimeout(async () => {
+      await refreshCompany(); // <-- THIS IS THE NEW, IMPORTANT LINE
+      
       setStatus('success');
       setMessage('Your subscription has been activated successfully!');
       
-      // Redirect to settings after 3 seconds
       setTimeout(() => {
         navigate('/settings', { state: { tab: 'plans' } });
       }, 3000);
-    }, 2000);
+      
+    }, 3000); // Increased timeout to 3s to be safe
 
     return () => clearTimeout(timer);
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, refreshCompany]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -39,8 +44,8 @@ export function StripeSuccessHandler() {
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Loader className="h-8 w-8 text-blue-600 animate-spin" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-2">Processing Payment</h1>
-            <p className="text-slate-600">Please wait while we activate your subscription...</p>
+            <h1 className="text-2xl font-bold text-slate-900">Finalizing Payment</h1>
+            <p className="text-slate-600">Please wait while we confirm your subscription...</p>
           </>
         )}
 
@@ -51,7 +56,7 @@ export function StripeSuccessHandler() {
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">Payment Successful!</h1>
             <p className="text-slate-600 mb-4">{message}</p>
-            <p className="text-sm text-slate-500">Redirecting you to your account...</p>
+            <p className="text-sm text-slate-500">Redirecting you to your settings...</p>
           </>
         )}
 
@@ -62,10 +67,7 @@ export function StripeSuccessHandler() {
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">Something went wrong</h1>
             <p className="text-slate-600 mb-4">{message}</p>
-            <button
-              onClick={() => navigate('/settings', { state: { tab: 'plans' } })}
-              className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
-            >
+            <button onClick={() => navigate('/settings', { state: { tab: 'plans' } })} className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors">
               Go to Settings
             </button>
           </>
