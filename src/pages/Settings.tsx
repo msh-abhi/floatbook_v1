@@ -60,12 +60,33 @@ export function Settings() {
   }, [company]);
 
   useEffect(() => {
-    if (companyId) {
-      fetchCompanyUsers();
-      fetchPlans();
-    } else {
-      setLoading(false);
-    }
+    const fetchInitialData = async () => {
+      if (!companyId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const [usersResponse, plansResponse] = await Promise.all([
+          supabase.from('company_users').select('*').eq('company_id', companyId),
+          supabase.from('plans').select('*').order('price')
+        ]);
+
+        if (usersResponse.error) throw usersResponse.error;
+        if (plansResponse.error) throw plansResponse.error;
+
+        setCompanyUsers(usersResponse.data || []);
+        setPlans(plansResponse.data || []);
+
+      } catch (error) {
+        console.error("Error fetching settings data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
   }, [companyId]);
   
   useEffect(() => {
@@ -73,38 +94,6 @@ export function Settings() {
       setActiveTab(location.state.tab);
     }
   }, [location.state]);
-
-  const fetchCompanyUsers = async () => {
-    if (!companyId) return;
-    try {
-      const { data, error } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', companyId);
-      if (error) throw error;
-      setCompanyUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching company users:', error);
-    } finally {
-      if (plans.length > 0) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const fetchPlans = async () => {
-    try {
-      const { data, error } = await supabase.from('plans').select('*').order('price');
-      if (error) throw error;
-      setPlans(data || []);
-    } catch(e) {
-      console.error("Error fetching plans", e)
-    } finally {
-      if (companyUsers.length > 0 || !companyId) {
-         setLoading(false);
-      }
-    }
-  };
 
   const handleUpdateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,12 +108,9 @@ export function Settings() {
         tax_rate: companyForm.tax_rate,
       });
 
-      if (error) {
-        alert('Error updating company. Please try again.');
-      } else {
-        alert('Company information updated successfully!');
-        window.location.reload();
-      }
+      if (error) throw error;
+      alert('Company information updated successfully!');
+      window.location.reload();
     } catch (error) {
       console.error('Error updating company:', error);
       alert('Error updating company. Please try again.');
@@ -135,28 +121,17 @@ export function Settings() {
   
   const handleActivateKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activationKey.trim()) {
-      alert("Please enter an activation key.");
-      return;
-    }
+    if (!activationKey.trim()) return alert("Please enter an activation key.");
+    
     try {
-      const { data, error } = await supabase.rpc('activate_plan_with_key', {
-        activation_key: activationKey.trim()
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-      
+      const { data, error } = await supabase.rpc('activate_plan_with_key', { activation_key: activationKey.trim() });
+      if (error) throw new Error(error.message);
       if (data && data.message) {
         alert(data.message);
-        if (data.success) {
-          window.location.reload(); 
-        }
+        if (data.success) window.location.reload();
       } else {
         throw new Error("Received an unexpected response from the server.");
       }
-
     } catch (err: any) {
       console.error("Activation error:", err);
       alert(`Activation Failed: ${err.message}`);
@@ -164,32 +139,20 @@ export function Settings() {
   };
 
   const handleStripeUpgrade = async (priceId: string | undefined) => {
-    if (!priceId) {
-      alert('This plan is not configured for Stripe payments yet.');
-      return;
-    }
+    if (!priceId) return alert('This plan is not configured for Stripe payments yet.');
 
     setIsRedirecting(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
         body: { price_id: priceId },
       });
-
-      if (error) {
-        throw new Error(`Edge Function invocation failed: ${error.message}`);
-      }
-
-      if (data.error) {
-        throw new Error(`Stripe Error: ${data.error}`);
-      }
-      
+      if (error) throw new Error(`Edge Function invocation failed: ${error.message}`);
+      if (data.error) throw new Error(`Stripe Error: ${data.error}`);
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        console.error("Unexpected response from checkout function:", data);
         throw new Error("Could not create a checkout session. Please try again.");
       }
-
     } catch (error: any) {
       console.error("Stripe upgrade process failed:", error);
       alert('Error starting subscription: ' + error.message);
@@ -250,6 +213,9 @@ export function Settings() {
     { id: 'email', name: 'Email Settings', icon: Mail },
   ];
 
+  // Get the price of the user's current plan for comparison
+  const currentPlanPrice = plans.find(p => p.name === companyForm.plan_name)?.price ?? 0;
+
   if (loading) {
     return (
       <div className="p-4 lg:p-8">
@@ -273,31 +239,18 @@ export function Settings() {
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="lg:w-64">
           <nav className="bg-white rounded-xl shadow-sm border border-gray-100 p-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-sm'
-                      : 'text-slate-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{tab.name}</span>
-                </button>
-              );
-            })}
+            {tabs.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-all ${activeTab === tab.id ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-sm' : 'text-slate-700 hover:bg-gray-50'}`}>
+                <tab.icon className="h-5 w-5" />
+                <span className="font-medium">{tab.name}</span>
+              </button>
+            ))}
           </nav>
         </div>
         <div className="flex-1">
           {activeTab === 'company' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-              <div className="p-6 border-b border-gray-100">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Building2 className="h-5 w-5 text-emerald-600" />Company Information</h2>
-              </div>
+             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+              <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Building2 className="h-5 w-5 text-emerald-600" />Company Information</h2></div>
               <div className="p-6">
                 <form onSubmit={handleUpdateCompany} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -417,7 +370,7 @@ export function Settings() {
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {plans.map((plan) => (
-                      <div key={plan.id} className={`relative rounded-xl border-2 p-6 ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white hover:border-gray-300'} transition-all`}>
+                      <div key={plan.id} className={`relative rounded-xl border-2 p-6 ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
                         {companyForm.plan_name === plan.name && (
                           <div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>
                         )}
@@ -429,21 +382,15 @@ export function Settings() {
                             <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
                             <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
                           </ul>
-                          {companyForm.plan_name !== plan.name && (
+                          
+                          {/* --- THIS IS THE CORRECTED LOGIC --- */}
+                          {companyForm.plan_name !== plan.name && plan.price > currentPlanPrice && (
                             <div className="space-y-2">
-                              <button 
-                                onClick={() => handleStripeUpgrade(plan.stripe_price_id)} 
-                                disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} 
-                                className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2"
-                              >
+                              <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
                                 <CreditCard className="h-4 w-4" />
                                 {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
                               </button>
-                              <button 
-                                onClick={() => handleBkashUpgrade(plan.id)} 
-                                disabled={bkashLoading === plan.id || isRedirecting} 
-                                className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2"
-                              >
+                              <button onClick={() => handleBkashUpgrade(plan.id)} disabled={bkashLoading === plan.id || isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
                                 <Smartphone className="h-4 w-4" />
                                 {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
                               </button>
