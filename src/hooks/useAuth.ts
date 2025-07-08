@@ -1,8 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
-export function useAuth() {
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  companyId: string | null;
+  systemRole: string | null;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signOut: () => Promise<{ error: any }>;
+  refreshCompany: () => Promise<void> | undefined;
+}
+
+const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -95,7 +108,7 @@ export function useAuth() {
     return { error };
   };
 
-  return {
+  const value = {
     user,
     loading,
     companyId,
@@ -103,6 +116,12 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    refreshCompany: () => user && fetchUserData(user.id),
+    refreshCompany: () => user ? fetchUserData(user.id) : undefined,
   };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+export const useAuth = () => {
+  return useContext(AuthContext);
+};
