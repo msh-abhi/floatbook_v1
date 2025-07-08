@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator, Smartphone } from 'lucide-react';
+import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useCompany } from '../hooks/useCompany';
@@ -21,7 +21,6 @@ export function Settings() {
   const [activationKey, setActivationKey] = useState('');
   
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [bkashLoading, setBkashLoading] = useState<string | null>(null);
 
   const [companyForm, setCompanyForm] = useState({
     name: '',
@@ -194,31 +193,6 @@ export function Settings() {
       console.error("Stripe upgrade process failed:", error);
       alert('Error starting subscription: ' + error.message);
       setIsRedirecting(false);
-    }
-  };
-
-  const handleBkashUpgrade = async (planId: string) => {
-    setBkashLoading(planId);
-    try {
-      const { data, error } = await supabase.functions.invoke('create-bkash-payment', {
-        body: { plan_id: planId },
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (data.success && data.bkashURL) {
-        // Redirect to bKash payment page
-        window.location.href = data.bkashURL;
-      } else {
-        throw new Error(data.error || 'Failed to create bKash payment');
-      }
-    } catch (error: any) {
-      console.error('bKash upgrade error:', error);
-      alert('Error starting bKash payment: ' + error.message);
-    } finally {
-      setBkashLoading(null);
     }
   };
 
@@ -431,24 +405,9 @@ export function Settings() {
                             <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
                           </ul>
                           {companyForm.plan_name !== plan.name && (
-                            <div className="space-y-2">
-                              <button 
-                                onClick={() => handleStripeUpgrade(plan.stripe_price_id)} 
-                                disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} 
-                                className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2"
-                              >
-                                <CreditCard className="h-4 w-4" />
-                                {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
-                              </button>
-                              <button 
-                                onClick={() => handleBkashUpgrade(plan.id)} 
-                                disabled={bkashLoading === plan.id || isRedirecting} 
-                                className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2"
-                              >
-                                <Smartphone className="h-4 w-4" />
-                                {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
-                              </button>
-                            </div>
+                            <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait">
+                              {isRedirecting ? 'Redirecting...' : 'Upgrade with Card'}
+                            </button>
                           )}
                         </div>
                       </div>
@@ -476,7 +435,7 @@ export function Settings() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="p-6 border-b border-gray-100"><h2 className="text-xl font-semibold text-slate-900">Invite Team Member</h2></div>
             <form onSubmit={handleInviteUser} className="p-6 space-y-4">
-              <div><label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label><div className="relative"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id=\"invite_email" type="email\" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all\" placeholder="colleague@company.com"/></div></div>
+              <div><label htmlFor="invite_email" className="block text-sm font-medium text-slate-700 mb-1">Email Address</label><div className="relative"><Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id="invite_email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="colleague@company.com"/></div></div>
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> This is a demo feature. In a production environment, this would send an invitation email to the user.</p></div>
               <div className="flex gap-3 pt-4"><button type="button" onClick={() => { setShowInviteModal(false); setInviteEmail(''); }} className="flex-1 px-4 py-3 border border-gray-300 text-slate-700 rounded-lg hover:bg-gray-50 font-medium transition-colors">Cancel</button><button type="submit" className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white px-4 py-3 rounded-lg font-medium hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 shadow-lg hover:shadow-xl">Send Invitation</button></div>
             </form>
