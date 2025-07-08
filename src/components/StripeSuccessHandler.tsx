@@ -6,26 +6,27 @@ import { useAuth } from '../hooks/useAuth'; // Import useAuth
 export function StripeSuccessHandler() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { refreshCompany } = useAuth(); // Get the refresh function from your hook
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('');
-  const { refreshCompany } = useAuth(); // Get the refresh function
+  const [message, setMessage] = useState('Please wait while we confirm your payment...');
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
     
     if (!sessionId) {
       setStatus('error');
-      setMessage('No session ID found in URL. Cannot confirm subscription status.');
+      setMessage('No session ID found. Cannot confirm subscription status.');
       return;
     }
 
-    // Give the webhook time to process, then refresh data and redirect.
+    // This timer gives the Stripe webhook a moment to update the database
     const timer = setTimeout(async () => {
-      await refreshCompany(); // This is the crucial line
+      await refreshCompany(); // <-- This is the crucial new line that refreshes the data
       
       setStatus('success');
       setMessage('Your subscription has been activated successfully!');
       
+      // Wait another few seconds before redirecting to show the success message
       setTimeout(() => {
         navigate('/settings', { state: { tab: 'plans' } });
       }, 3000);
@@ -44,7 +45,7 @@ export function StripeSuccessHandler() {
               <Loader className="h-8 w-8 text-blue-600 animate-spin" />
             </div>
             <h1 className="text-2xl font-bold text-slate-900">Finalizing Payment</h1>
-            <p className="text-slate-600">Please wait while we confirm your subscription...</p>
+            <p className="text-slate-600">{message}</p>
           </>
         )}
 
