@@ -209,7 +209,6 @@ export function Settings() {
       }
 
       if (data.success && data.bkashURL) {
-        // Redirect to bKash payment page
         window.location.href = data.bkashURL;
       } else {
         throw new Error(data.error || 'Failed to create bKash payment');
