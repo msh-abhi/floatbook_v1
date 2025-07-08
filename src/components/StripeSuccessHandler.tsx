@@ -1,4 +1,3 @@
-// src/components/StripeSuccessHandler.tsx
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
@@ -22,7 +21,7 @@ export function StripeSuccessHandler() {
 
     // Give the webhook time to process, then refresh data and redirect.
     const timer = setTimeout(async () => {
-      await refreshCompany(); // <-- THIS IS THE NEW, IMPORTANT LINE
+      await refreshCompany(); // This is the crucial line
       
       setStatus('success');
       setMessage('Your subscription has been activated successfully!');
@@ -31,7 +30,7 @@ export function StripeSuccessHandler() {
         navigate('/settings', { state: { tab: 'plans' } });
       }, 3000);
       
-    }, 3000); // Increased timeout to 3s to be safe
+    }, 3000); // Wait 3 seconds for the webhook to be safe
 
     return () => clearTimeout(timer);
   }, [searchParams, navigate, refreshCompany]);
@@ -67,7 +66,10 @@ export function StripeSuccessHandler() {
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">Something went wrong</h1>
             <p className="text-slate-600 mb-4">{message}</p>
-            <button onClick={() => navigate('/settings', { state: { tab: 'plans' } })} className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors">
+            <button
+              onClick={() => navigate('/settings', { state: { tab: 'plans' } })}
+              className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+            >
               Go to Settings
             </button>
           </>
