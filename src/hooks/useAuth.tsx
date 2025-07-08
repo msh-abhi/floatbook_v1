@@ -1,20 +1,23 @@
+// src/hooks/useAuth.tsx
+
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
+// Define the shape of your context
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   companyId: string | null;
   systemRole: string | null;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
-  signOut: () => Promise<{ error: any }>;
-  refreshCompany: () => Promise<void> | undefined;
+  signOut: () => Promise<void>;
+  refreshCompany: () => Promise<void>;
 }
 
+// Create the context
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
+// Create the provider component
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,21 +25,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [systemRole, setSystemRole] = useState<string>('user');
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    const fetchUserData = async (userId: string) => {
+      try {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('system_role')
+          .eq('id', userId)
+          .single();
+        setSystemRole(userData?.system_role || 'user');
+
+        if (userData?.system_role === 'superadmin') {
+          setCompanyId(null);
+        } else {
+          const { data: companyData } = await supabase
+            .from('company_users')
+            .select('company_id')
+            .eq('user_id', userId)
+            .single();
+          setCompanyId(companyData?.company_id || null);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        fetchUserData(session.user.id);
+        setUser(session.user);
+        await fetchUserData(session.user.id);
       } else {
         setLoading(false);
       }
-    });
+    };
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        await fetchUserData(currentUser.id);
       } else {
         setCompanyId(null);
         setSystemRole('user');
@@ -44,84 +75,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
-  const fetchUserData = async (userId: string) => {
-    try {
-      // Fetch user's system role
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('system_role')
-        .eq('id', userId)
-        .single();
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
 
-      if (userError) {
-        console.error('Error fetching user data:', userError);
-      } else {
-        setSystemRole(userData?.system_role || 'user');
+  const refreshCompany = async () => {
+    if (user) {
+      setLoading(true);
+      // Re-fetch all user-related data
+      const { data: { session } } = await supabase.auth.getSession();
+       if (session?.user) {
+        setUser(session.user);
+        await fetchUserData(session.user.id);
       }
-
-      // If user is superadmin, don't fetch company data
-      if (userData?.system_role === 'superadmin') {
-        setCompanyId(null);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch user's company for regular users
-      const { data: companyData, error: companyError } = await supabase
-        .from('company_users')
-        .select('company_id')
-        .eq('user_id', userId);
-
-      if (companyError) {
-        console.error('Error fetching user company:', companyError);
-      } else if (companyData && companyData.length > 0) {
-        setCompanyId(companyData[0].company_id);
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    } finally {
       setLoading(false);
     }
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
-  };
-
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    return { error };
-  };
-
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    return { error };
-  };
-
-  const value = {
-    user,
-    loading,
-    companyId,
-    systemRole,
-    signIn,
-    signUp,
-    signOut,
-    refreshCompany: () => user ? fetchUserData(user.id) : undefined,
-  };
+  const value = { user, loading, companyId, systemRole, signOut, refreshCompany };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+};
 
+// Create the custom hook to use the context
 export const useAuth = () => {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
