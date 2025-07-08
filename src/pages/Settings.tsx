@@ -19,7 +19,6 @@ export function Settings() {
   
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activationKey, setActivationKey] = useState('');
-  
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const [companyForm, setCompanyForm] = useState({
@@ -44,6 +43,39 @@ export function Settings() {
   
   const [inviteEmail, setInviteEmail] = useState('');
 
+  // --- This is the corrected data fetching logic ---
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      if (!companyId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // Fetch all data in parallel
+        const [usersResponse, plansResponse] = await Promise.all([
+          supabase.from('company_users').select('*').eq('company_id', companyId),
+          supabase.from('plans').select('*').order('price')
+        ]);
+
+        if (usersResponse.error) throw usersResponse.error;
+        if (plansResponse.error) throw plansResponse.error;
+
+        setCompanyUsers(usersResponse.data || []);
+        setPlans(plansResponse.data || []);
+
+      } catch (error) {
+        console.error("Error fetching settings data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [companyId]);
+  // ---------------------------------------------
+
   useEffect(() => {
     if (company) {
       setCompanyForm({
@@ -59,51 +91,10 @@ export function Settings() {
   }, [company]);
 
   useEffect(() => {
-    if (companyId) {
-      fetchCompanyUsers();
-      fetchPlans();
-    } else {
-      setLoading(false);
-    }
-  }, [companyId]);
-  
-  useEffect(() => {
     if (location.state?.tab) {
       setActiveTab(location.state.tab);
     }
   }, [location.state]);
-
-  const fetchCompanyUsers = async () => {
-    if (!companyId) return;
-    try {
-      const { data, error } = await supabase
-        .from('company_users')
-        .select('*')
-        .eq('company_id', companyId);
-      if (error) throw error;
-      setCompanyUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching company users:', error);
-    } finally {
-      if (plans.length > 0) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const fetchPlans = async () => {
-    try {
-      const { data, error } = await supabase.from('plans').select('*').order('price');
-      if (error) throw error;
-      setPlans(data || []);
-    } catch(e) {
-      console.error("Error fetching plans", e)
-    } finally {
-      if (companyUsers.length > 0 || !companyId) {
-         setLoading(false);
-      }
-    }
-  };
 
   const handleUpdateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,12 +109,9 @@ export function Settings() {
         tax_rate: companyForm.tax_rate,
       });
 
-      if (error) {
-        alert('Error updating company. Please try again.');
-      } else {
-        alert('Company information updated successfully!');
-        window.location.reload();
-      }
+      if (error) throw error;
+      alert('Company information updated successfully!');
+      window.location.reload();
     } catch (error) {
       console.error('Error updating company:', error);
       alert('Error updating company. Please try again.');
@@ -134,28 +122,17 @@ export function Settings() {
   
   const handleActivateKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activationKey.trim()) {
-      alert("Please enter an activation key.");
-      return;
-    }
+    if (!activationKey.trim()) return alert("Please enter an activation key.");
+    
     try {
-      const { data, error } = await supabase.rpc('activate_plan_with_key', {
-        activation_key: activationKey.trim()
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-      
+      const { data, error } = await supabase.rpc('activate_plan_with_key', { activation_key: activationKey.trim() });
+      if (error) throw new Error(error.message);
       if (data && data.message) {
         alert(data.message);
-        if (data.success) {
-          window.location.reload(); 
-        }
+        if (data.success) window.location.reload();
       } else {
         throw new Error("Received an unexpected response from the server.");
       }
-
     } catch (err: any) {
       console.error("Activation error:", err);
       alert(`Activation Failed: ${err.message}`);
@@ -163,32 +140,20 @@ export function Settings() {
   };
 
   const handleStripeUpgrade = async (priceId: string | undefined) => {
-    if (!priceId) {
-      alert('This plan is not configured for Stripe payments yet.');
-      return;
-    }
+    if (!priceId) return alert('This plan is not configured for Stripe payments yet.');
 
     setIsRedirecting(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
         body: { price_id: priceId },
       });
-
-      if (error) {
-        throw new Error(`Edge Function invocation failed: ${error.message}`);
-      }
-
-      if (data.error) {
-        throw new Error(`Stripe Error: ${data.error}`);
-      }
-      
+      if (error) throw new Error(`Edge Function invocation failed: ${error.message}`);
+      if (data.error) throw new Error(`Stripe Error: ${data.error}`);
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       } else {
-        console.error("Unexpected response from checkout function:", data);
         throw new Error("Could not create a checkout session. Please try again.");
       }
-
     } catch (error: any) {
       console.error("Stripe upgrade process failed:", error);
       alert('Error starting subscription: ' + error.message);
@@ -248,23 +213,12 @@ export function Settings() {
       <div className="flex flex-col lg:flex-row gap-8">
         <div className="lg:w-64">
           <nav className="bg-white rounded-xl shadow-sm border border-gray-100 p-2">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-sm'
-                      : 'text-slate-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{tab.name}</span>
-                </button>
-              );
-            })}
+            {tabs.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`w-full flex items-center gap-3 px-4 py-3 text-left rounded-xl transition-all ${activeTab === tab.id ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-700 shadow-sm' : 'text-slate-700 hover:bg-gray-50'}`}>
+                <tab.icon className="h-5 w-5" />
+                <span className="font-medium">{tab.name}</span>
+              </button>
+            ))}
           </nav>
         </div>
         <div className="flex-1">
@@ -341,45 +295,13 @@ export function Settings() {
           {activeTab === 'email' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Mail className="h-5 w-5 text-emerald-600" />Email Settings</h2></div>
-              <div className="p-6">
-                <div className="space-y-6">
-                  <div>
-                    <label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <input id="brevo_api_key" type="password" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter your Brevo API key" />
-                    </div>
-                    <p className="text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p>
-                  </div>
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                    <p className="text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p>
-                  </div>
-                </div>
-              </div>
+              <div className="p-6"><div className="space-y-6"><div><label htmlFor="brevo_api_key" className="block text-sm font-medium text-slate-700 mb-2">Brevo API Key</label><div className="relative"><Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-400" /><input id="brevo_api_key" type="password" value={emailSettings.brevo_api_key} onChange={(e) => setEmailSettings({ ...emailSettings, brevo_api_key: e.target.value })} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter your Brevo API key" /></div><p className="text-sm text-slate-500 mt-2">Used for sending booking confirmations and notifications.</p></div><div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4"><p className="text-sm text-emerald-700"><strong>Note:</strong> Email settings are stored securely and used for automated notifications.</p></div></div></div>
             </div>
           )}
           {activeTab === 'payment' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><CreditCard className="h-5 w-5 text-emerald-600" />Payment Method Settings</h2></div>
-              <div className="p-6">
-                <div className="space-y-6">
-                  <div>
-                    <label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">Stripe Secret Key</label>
-                    <input id="stripe_secret_key" type="password" value={paymentSettings.stripe_secret_key} onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="sk_test_..."/>
-                  </div>
-                  <div>
-                    <label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">PayPal Client ID</label>
-                    <input id="paypal_client_id" type="text" value={paymentSettings.paypal_client_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter PayPal Client ID"/>
-                  </div>
-                  <div>
-                    <label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">bKash Merchant ID</label>
-                    <input id="bkash_merchant_id" type="text" value={paymentSettings.bkash_merchant_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter bKash Merchant ID"/>
-                  </div>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-sm text-yellow-700"><strong>Security:</strong> Payment credentials are encrypted and stored securely.</p>
-                  </div>
-                </div>
-              </div>
+              <div className="p-6"><div className="space-y-6"><div><label htmlFor="stripe_secret_key" className="block text-sm font-medium text-slate-700 mb-2">Stripe Secret Key</label><input id="stripe_secret_key" type="password" value={paymentSettings.stripe_secret_key} onChange={(e) => setPaymentSettings({ ...paymentSettings, stripe_secret_key: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="sk_test_..."/></div><div><label htmlFor="paypal_client_id" className="block text-sm font-medium text-slate-700 mb-2">PayPal Client ID</label><input id="paypal_client_id" type="text" value={paymentSettings.paypal_client_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, paypal_client_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter PayPal Client ID"/></div><div><label htmlFor="bkash_merchant_id" className="block text-sm font-medium text-slate-700 mb-2">bKash Merchant ID</label><input id="bkash_merchant_id" type="text" value={paymentSettings.bkash_merchant_id} onChange={(e) => setPaymentSettings({ ...paymentSettings, bkash_merchant_id: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Enter bKash Merchant ID"/></div><div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"><p className="text-sm text-yellow-700"><strong>Security:</strong> Payment credentials are encrypted and stored securely.</p></div></div></div>
             </div>
           )}
           {activeTab === 'plans' && (
