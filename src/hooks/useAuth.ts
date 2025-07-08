@@ -31,7 +31,7 @@ export function useAuth() {
       }
     });
 
-    return () => subscription?.unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchUserData = async (userId: string) => {
@@ -42,23 +42,29 @@ export function useAuth() {
         .eq('id', userId)
         .single();
 
-      if (userError) console.error('Error fetching user data:', userError);
-      setSystemRole(userData?.system_role || 'user');
+      if (userError) {
+        console.error('Error fetching user data:', userError);
+      } else {
+        setSystemRole(userData?.system_role || 'user');
+      }
 
       if (userData?.system_role === 'superadmin') {
         setCompanyId(null);
-      } else {
-        const { data: companyData, error: companyError } = await supabase
-          .from('company_users')
-          .select('company_id')
-          .eq('user_id', userId)
-          .single();
-        
-        if (companyError && companyError.code !== 'PGRST116') {
-            console.error('Error fetching user company:', companyError);
-        }
-        setCompanyId(companyData?.company_id || null);
+        setLoading(false);
+        return;
       }
+
+      const { data: companyData, error: companyError } = await supabase
+        .from('company_users')
+        .select('company_id')
+        .eq('user_id', userId)
+        .single();
+      
+      if (companyError && companyError.code !== 'PGRST116') {
+          console.error('Error fetching user company:', companyError);
+      }
+      setCompanyId(companyData?.company_id || null);
+
     } catch (error) {
       console.error('Error in fetchUserData:', error);
     } finally {
@@ -86,11 +92,13 @@ export function useAuth() {
     await supabase.auth.signOut();
   };
 
+  // This is the new function to trigger a data refresh
   const refreshCompany = async () => {
-      if(user) {
-          await fetchUserData(user.id);
-      }
-  }
+    if (user) {
+      setLoading(true); // Show a brief loading indicator
+      await fetchUserData(user.id);
+    }
+  };
 
   return {
     user,
@@ -100,6 +108,6 @@ export function useAuth() {
     signIn,
     signUp,
     signOut,
-    refreshCompany,
+    refreshCompany, // Export the new function
   };
 }
