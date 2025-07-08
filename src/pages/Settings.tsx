@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator } from 'lucide-react';
+import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator, Smartphone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useCompany } from '../hooks/useCompany';
@@ -21,6 +21,7 @@ export function Settings() {
   const [activationKey, setActivationKey] = useState('');
   
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [bkashLoading, setBkashLoading] = useState<string | null>(null);
 
   const [companyForm, setCompanyForm] = useState({
     name: '',
@@ -193,6 +194,31 @@ export function Settings() {
       console.error("Stripe upgrade process failed:", error);
       alert('Error starting subscription: ' + error.message);
       setIsRedirecting(false);
+    }
+  };
+
+  const handleBkashUpgrade = async (planId: string) => {
+    setBkashLoading(planId);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-bkash-payment', {
+        body: { plan_id: planId },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data.success && data.bkashURL) {
+        // Redirect to bKash payment page
+        window.location.href = data.bkashURL;
+      } else {
+        throw new Error(data.error || 'Failed to create bKash payment');
+      }
+    } catch (error: any) {
+      console.error('bKash upgrade error:', error);
+      alert('Error starting bKash payment: ' + error.message);
+    } finally {
+      setBkashLoading(null);
     }
   };
 
@@ -405,9 +431,24 @@ export function Settings() {
                             <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
                           </ul>
                           {companyForm.plan_name !== plan.name && (
-                            <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait">
-                              {isRedirecting ? 'Redirecting...' : 'Upgrade with Card'}
-                            </button>
+                            <div className="space-y-2">
+                              <button 
+                                onClick={() => handleStripeUpgrade(plan.stripe_price_id)} 
+                                disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} 
+                                className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2"
+                              >
+                                <CreditCard className="h-4 w-4" />
+                                {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
+                              </button>
+                              <button 
+                                onClick={() => handleBkashUpgrade(plan.id)} 
+                                disabled={bkashLoading === plan.id || isRedirecting} 
+                                className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2"
+                              >
+                                <Smartphone className="h-4 w-4" />
+                                {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>

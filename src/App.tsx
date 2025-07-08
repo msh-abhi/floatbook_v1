@@ -13,6 +13,7 @@ import { ManageUsers } from './pages/admin/ManageUsers';
 import { ManagePlans } from './pages/admin/ManagePlans';
 import { ManageKeys } from './pages/admin/ManageKeys';
 import { StripeSuccessHandler } from './components/StripeSuccessHandler';
+import { BkashCallback } from './pages/BkashCallback';
 
 // Lazy load other pages
 const Bookings = React.lazy(() => import('./pages/Bookings').then(module => ({ default: module.Bookings })));
@@ -47,6 +48,7 @@ function App() {
           <Route path="/auth" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="/stripe/success" element={<StripeSuccessHandler />} />
+          <Route path="/bkash/callback" element={<BkashCallback />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="companies" element={<ManageCompanies />} />
@@ -73,8 +75,8 @@ function App() {
         <Route path="/auth" element={<Navigate to="/dashboard" replace />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         
-        {/* The new route is correctly placed here */}
         <Route path="/stripe/success" element={<StripeSuccessHandler />} />
+        <Route path="/bkash/callback" element={<BkashCallback />} />
 
         <Route path="/" element={<Layout />}>
           <Route path="dashboard" element={<Dashboard />} />
