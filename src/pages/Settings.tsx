@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator, Smartphone, Edit } from 'lucide-react';
+import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator, Smartphone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useCompany } from '../hooks/useCompany';
@@ -16,10 +16,10 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'company' | 'team' | 'email' | 'payment' | 'plans' | 'tax'>('company');
-  
+
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activationKey, setActivationKey] = useState('');
-  
+
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [bkashLoading, setBkashLoading] = useState<string | null>(null);
 
@@ -36,13 +36,13 @@ export function Settings() {
   const [emailSettings, setEmailSettings] = useState({
     brevo_api_key: '',
   });
-  
+
   const [paymentSettings, setPaymentSettings] = useState({
     stripe_secret_key: '',
     paypal_client_id: '',
     bkash_merchant_id: '',
   });
-  
+
   const [inviteEmail, setInviteEmail] = useState('');
 
   useEffect(() => {
@@ -65,22 +65,27 @@ export function Settings() {
         setLoading(false);
         return;
       }
+
       try {
         setLoading(true);
         const [usersResponse, plansResponse] = await Promise.all([
           supabase.from('company_users').select('*').eq('company_id', companyId),
           supabase.from('plans').select('*').order('price')
         ]);
+
         if (usersResponse.error) throw usersResponse.error;
         if (plansResponse.error) throw plansResponse.error;
+
         setCompanyUsers(usersResponse.data || []);
         setPlans(plansResponse.data || []);
+
       } catch (error) {
         console.error("Error fetching settings data:", error);
       } finally {
         setLoading(false);
       }
     };
+
     fetchInitialData();
   }, [companyId]);
   
@@ -102,6 +107,7 @@ export function Settings() {
         tax_enabled: companyForm.tax_enabled,
         tax_rate: companyForm.tax_rate,
       });
+
       if (error) throw error;
       alert('Company information updated successfully!');
       window.location.reload();
@@ -116,6 +122,7 @@ export function Settings() {
   const handleActivateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activationKey.trim()) return alert("Please enter an activation key.");
+    
     try {
       const { data, error } = await supabase.rpc('activate_plan_with_key', { activation_key: activationKey.trim() });
       if (error) throw new Error(error.message);
@@ -133,6 +140,7 @@ export function Settings() {
 
   const handleStripeUpgrade = async (priceId: string | undefined) => {
     if (!priceId) return alert('This plan is not configured for Stripe payments yet.');
+
     setIsRedirecting(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-stripe-checkout', {
@@ -151,7 +159,7 @@ export function Settings() {
       setIsRedirecting(false);
     }
   };
-
+  
   const handleBkashUpgrade = async (planId: string) => {
     setBkashLoading(planId);
     try {
@@ -179,6 +187,8 @@ export function Settings() {
       if (error) throw error;
       if (data.portal_url) {
         window.location.href = data.portal_url;
+      } else {
+        throw new Error("Could not open the customer portal.");
       }
     } catch (error: any) {
       alert('Error accessing customer portal: ' + error.message);
@@ -387,24 +397,24 @@ export function Settings() {
                             </div>
                         </div>
                         <div className="mt-auto pt-4">
-                            {companyForm.plan_name === plan.name && plan.price > 0 && company?.stripe_customer_id && (
-                                <button onClick={handleManageSubscription} disabled={isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 disabled:opacity-50 flex items-center justify-center gap-2">
-                                    <SettingsIcon className="h-4 w-4" /> Manage Subscription
-                                </button>
-                            )}
+                          {companyForm.plan_name === plan.name && plan.price > 0 && company?.stripe_customer_id && (
+                              <button onClick={handleManageSubscription} disabled={isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 disabled:opacity-50 flex items-center justify-center gap-2">
+                                  <SettingsIcon className="h-4 w-4" /> Manage Subscription
+                              </button>
+                          )}
                           
-                            {companyForm.plan_name !== plan.name && plan.price > currentPlanPrice && (
-                                <div className="space-y-2">
-                                <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
-                                    <CreditCard className="h-4 w-4" />
-                                    {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
-                                </button>
-                                <button onClick={() => handleBkashUpgrade(plan.id)} disabled={bkashLoading === plan.id || isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
-                                    <Smartphone className="h-4 w-4" />
-                                    {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
-                                </button>
-                                </div>
-                            )}
+                          {companyForm.plan_name !== plan.name && plan.price > currentPlanPrice && (
+                              <div className="space-y-2">
+                              <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
+                                  <CreditCard className="h-4 w-4" />
+                                  {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
+                              </button>
+                              <button onClick={() => handleBkashUpgrade(plan.id)} disabled={bkashLoading === plan.id || isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
+                                  <Smartphone className="h-4 w-4" />
+                                  {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
+                              </button>
+                              </div>
+                          )}
                         </div>
                       </div>
                     ))}
