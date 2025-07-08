@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator, Smartphone } from 'lucide-react';
+import { Building2, Users, LogOut, Mail, Trash2, UserPlus, Settings as SettingsIcon, CreditCard, Crown, MapPin, Key, Zap, Calculator, Smartphone, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useCompany } from '../hooks/useCompany';
@@ -16,10 +16,10 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'company' | 'team' | 'email' | 'payment' | 'plans' | 'tax'>('company');
-  
+
   const [plans, setPlans] = useState<Plan[]>([]);
   const [activationKey, setActivationKey] = useState('');
-  
+
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [bkashLoading, setBkashLoading] = useState<string | null>(null);
 
@@ -27,6 +27,8 @@ export function Settings() {
     name: '',
     logo_url: '',
     address: '',
+    phone_number: '', // New field
+    billing_contact: '', // New field
     currency: 'USD',
     tax_enabled: false,
     tax_rate: 0,
@@ -36,13 +38,13 @@ export function Settings() {
   const [emailSettings, setEmailSettings] = useState({
     brevo_api_key: '',
   });
-  
+
   const [paymentSettings, setPaymentSettings] = useState({
     stripe_secret_key: '',
     paypal_client_id: '',
     bkash_merchant_id: '',
   });
-  
+
   const [inviteEmail, setInviteEmail] = useState('');
 
   useEffect(() => {
@@ -51,6 +53,8 @@ export function Settings() {
         name: company.name || '',
         logo_url: company.logo_url || '',
         address: company.address || '',
+        phone_number: company.phone_number || '', // New field
+        billing_contact: company.billing_contact || '', // New field
         currency: company.currency || 'USD',
         tax_enabled: company.tax_enabled || false,
         tax_rate: company.tax_rate || 0,
@@ -83,7 +87,7 @@ export function Settings() {
     };
     fetchInitialData();
   }, [companyId]);
-  
+
   useEffect(() => {
     if (location.state?.tab) {
       setActiveTab(location.state.tab);
@@ -98,13 +102,14 @@ export function Settings() {
         name: companyForm.name,
         logo_url: companyForm.logo_url || null,
         address: companyForm.address || null,
+        phone_number: companyForm.phone_number || null, // New field
+        billing_contact: companyForm.billing_contact || null, // New field
         currency: companyForm.currency,
         tax_enabled: companyForm.tax_enabled,
         tax_rate: companyForm.tax_rate,
       });
       if (error) throw error;
       alert('Company information updated successfully!');
-      window.location.reload();
     } catch (error) {
       console.error('Error updating company:', error);
       alert('Error updating company. Please try again.');
@@ -112,7 +117,7 @@ export function Settings() {
       setSaving(false);
     }
   };
-  
+
   const handleActivateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activationKey.trim()) return alert("Please enter an activation key.");
@@ -263,9 +268,17 @@ export function Settings() {
                       <input id="company_name" type="text" value={companyForm.name} onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })} required className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" />
                     </div>
                     <div>
-                      <label htmlFor="address" className="block text-sm font-medium text-slate-700 mb-2">Address</label>
-                      <input id="address" type="text" value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Company address" />
+                      <label htmlFor="phone_number" className="block text-sm font-medium text-slate-700 mb-2">Phone Number</label>
+                      <input id="phone_number" type="tel" value={companyForm.phone_number} onChange={(e) => setCompanyForm({ ...companyForm, phone_number: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Company phone number" />
                     </div>
+                  </div>
+                   <div>
+                      <label htmlFor="billing_contact" className="block text-sm font-medium text-slate-700 mb-2">Billing Contact Email</label>
+                      <input id="billing_contact" type="email" value={companyForm.billing_contact} onChange={(e) => setCompanyForm({ ...companyForm, billing_contact: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="billing@example.com" />
+                  </div>
+                  <div>
+                    <label htmlFor="address" className="block text-sm font-medium text-slate-700 mb-2">Address</label>
+                    <input id="address" type="text" value={companyForm.address} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all" placeholder="Company address" />
                   </div>
                   <div>
                     <label htmlFor="company_currency" className="block text-sm font-medium text-slate-700 mb-2">Currency</label>
@@ -370,52 +383,45 @@ export function Settings() {
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {plans.map((plan) => {
-                      const displayPrice = companyForm.currency === 'BDT' ? plan.price_bdt : plan.price_usd;
-                      const displaySymbol = companyForm.currency === 'BDT' ? '৳' : '$';
-                      const planPrice = companyForm.currency === 'BDT' ? plan.price_bdt : plan.price_usd;
-
-                      return (
-                        <div key={plan.id} className={`relative rounded-xl border-2 p-6 flex flex-col ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
-                          <div className="flex-grow">
-                            {companyForm.plan_name === plan.name && (<div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>)}
-                            <div className="text-center">
-                              <h3 className="text-lg font-semibold text-slate-900 mb-2">{plan.name}</h3>
-                              <div className="mb-4"><span className="text-3xl font-bold text-slate-900">{displaySymbol}{displayPrice}</span><span className="text-slate-600">/month</span></div>
-                              <ul className="space-y-2 mb-6 text-sm text-slate-600">
-                                <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.room_limit === -1 ? 'Unlimited' : `${plan.room_limit} rooms`}</li>
-                                <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
-                                <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
-                              </ul>
-                            </div>
-                          </div>
-                          <div className="mt-auto pt-4">
-                            {companyForm.plan_name === plan.name && planPrice > 0 && company?.stripe_customer_id && (
-                              <button onClick={handleManageSubscription} disabled={isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 disabled:opacity-50 flex items-center justify-center gap-2">
-                                <SettingsIcon className="h-4 w-4" /> Manage Subscription
-                              </button>
-                            )}
-                            
-                            {companyForm.plan_name !== plan.name && planPrice > currentPlanPrice && (
-                              <div className="space-y-2">
-                                {companyForm.currency === 'USD' && (
-                                  <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
-                                    <CreditCard className="h-4 w-4" />
-                                    {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
-                                  </button>
-                                )}
-                                {companyForm.currency === 'BDT' && (
-                                  <button onClick={() => handleBkashUpgrade(plan.id)} disabled={bkashLoading === plan.id || isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
-                                    <Smartphone className="h-4 w-4" />
-                                    {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                    {plans.map((plan) => (
+                      <div key={plan.id} className={`relative rounded-xl border-2 p-6 flex flex-col ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
+                        <div className="flex-grow">
+                          {companyForm.plan_name === plan.name && (<div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>)}
+                          <div className="text-center">
+                            <h3 className="text-lg font-semibold text-slate-900 mb-2">{plan.name}</h3>
+                            <div className="mb-4"><span className="text-3xl font-bold text-slate-900">${plan.price_usd}</span><span className="text-slate-600">/month</span></div>
+                            <ul className="space-y-2 mb-6 text-sm text-slate-600">
+                              <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.room_limit === -1 ? 'Unlimited' : `${plan.room_limit} rooms`}</li>
+                              <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
+                              <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
+                            </ul>
                           </div>
                         </div>
-                      )
-                    })}
+                        <div className="mt-auto pt-4">
+                          {companyForm.plan_name === plan.name && plan.price_usd > 0 && company?.stripe_customer_id && (
+                            <button onClick={handleManageSubscription} disabled={isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 disabled:opacity-50 flex items-center justify-center gap-2">
+                              <SettingsIcon className="h-4 w-4" /> Manage Subscription
+                            </button>
+                          )}
+                          {companyForm.plan_name !== plan.name && (
+                            <div className="space-y-2">
+                              {plan.price_usd > currentPlanPrice && (
+                                <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
+                                  <CreditCard className="h-4 w-4" />
+                                  {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
+                                </button>
+                              )}
+                              {companyForm.currency === 'BDT' && plan.price_bdt > currentPlanPrice && (
+                                <button onClick={() => handleBkashUpgrade(plan.id)} disabled={bkashLoading === plan.id || isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
+                                  <Smartphone className="h-4 w-4" />
+                                  {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
