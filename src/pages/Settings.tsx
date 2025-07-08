@@ -159,7 +159,7 @@ export function Settings() {
       setIsRedirecting(false);
     }
   };
-
+  
   const handleBkashUpgrade = async (planId: string) => {
     setBkashLoading(planId);
     try {
@@ -183,6 +183,24 @@ export function Settings() {
       setBkashLoading(null);
     }
   };
+  
+  // --- NEW: Function to handle redirect to Stripe Customer Portal ---
+  const handleManageSubscription = async () => {
+    setIsRedirecting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-customer-portal');
+      if (error) throw error;
+      if (data.portal_url) {
+        window.location.href = data.portal_url;
+      } else {
+        throw new Error("Could not open the customer portal.");
+      }
+    } catch (error: any) {
+      alert('Error accessing customer portal: ' + error.message);
+      setIsRedirecting(false);
+    }
+  };
+  // --------------------------------------------------------------------
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,7 +231,6 @@ export function Settings() {
     { id: 'email', name: 'Email Settings', icon: Mail },
   ];
 
-  // Get the price of the user's current plan for comparison
   const currentPlanPrice = plans.find(p => p.name === companyForm.plan_name)?.price ?? 0;
 
   if (loading) {
@@ -249,7 +266,7 @@ export function Settings() {
         </div>
         <div className="flex-1">
           {activeTab === 'company' && (
-             <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100">
               <div className="p-6 border-b border-gray-100"><h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2"><Building2 className="h-5 w-5 text-emerald-600" />Company Information</h2></div>
               <div className="p-6">
                 <form onSubmit={handleUpdateCompany} className="space-y-6">
@@ -370,32 +387,41 @@ export function Settings() {
                 <div className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {plans.map((plan) => (
-                      <div key={plan.id} className={`relative rounded-xl border-2 p-6 ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
-                        {companyForm.plan_name === plan.name && (
-                          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>
-                        )}
-                        <div className="text-center">
-                          <h3 className="text-lg font-semibold text-slate-900 mb-2">{plan.name}</h3>
-                          <div className="mb-4"><span className="text-3xl font-bold text-slate-900">${plan.price}</span><span className="text-slate-600">/month</span></div>
-                          <ul className="space-y-2 mb-6 text-sm text-slate-600">
-                            <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.room_limit === -1 ? 'Unlimited' : `${plan.room_limit} rooms`}</li>
-                            <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
-                            <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
-                          </ul>
-                          
-                          {/* --- THIS IS THE CORRECTED LOGIC --- */}
-                          {companyForm.plan_name !== plan.name && plan.price > currentPlanPrice && (
-                            <div className="space-y-2">
-                              <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
-                                <CreditCard className="h-4 w-4" />
-                                {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
-                              </button>
-                              <button onClick={() => handleBkashUpgrade(plan.id)} disabled={bkashLoading === plan.id || isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
-                                <Smartphone className="h-4 w-4" />
-                                {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
-                              </button>
+                      <div key={plan.id} className={`relative rounded-xl border-2 p-6 flex flex-col ${companyForm.plan_name === plan.name ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-white'}`}>
+                        <div className="flex-grow">
+                            {companyForm.plan_name === plan.name && (
+                                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2"><span className="bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Current Plan</span></div>
+                            )}
+                            <div className="text-center">
+                                <h3 className="text-lg font-semibold text-slate-900 mb-2">{plan.name}</h3>
+                                <div className="mb-4"><span className="text-3xl font-bold text-slate-900">${plan.price}</span><span className="text-slate-600">/month</span></div>
+                                <ul className="space-y-2 mb-6 text-sm text-slate-600">
+                                    <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.room_limit === -1 ? 'Unlimited' : `${plan.room_limit} rooms`}</li>
+                                    <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.booking_limit === -1 ? 'Unlimited' : `${plan.booking_limit} bookings`}</li>
+                                    <li className="flex items-center justify-center gap-2"><Zap className="h-4 w-4 text-emerald-500" /> {plan.user_limit === -1 ? 'Unlimited' : `${plan.user_limit} users`}</li>
+                                </ul>
                             </div>
-                          )}
+                        </div>
+                        <div className="mt-auto pt-4">
+                            {/* --- THIS IS THE FINAL CORRECTED LOGIC --- */}
+                            {companyForm.plan_name === plan.name && plan.price > 0 && company?.stripe_customer_id && (
+                                <button onClick={handleManageSubscription} disabled={isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 disabled:opacity-50 flex items-center justify-center gap-2">
+                                    <SettingsIcon className="h-4 w-4" /> Manage Subscription
+                                </button>
+                            )}
+
+                            {companyForm.plan_name !== plan.name && plan.price > currentPlanPrice && (
+                                <div className="space-y-2">
+                                <button onClick={() => handleStripeUpgrade(plan.stripe_price_id)} disabled={isRedirecting || !plan.stripe_price_id || bkashLoading === plan.id} className="w-full py-2 px-4 rounded-xl font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
+                                    <CreditCard className="h-4 w-4" />
+                                    {isRedirecting ? 'Redirecting...' : 'Pay with Card'}
+                                </button>
+                                <button onClick={() => handleBkashUpgrade(plan.id)} disabled={bkashLoading === plan.id || isRedirecting} className="w-full py-2 px-4 rounded-xl font-medium bg-pink-600 text-white hover:bg-pink-700 disabled:bg-gray-400 disabled:cursor-wait flex items-center justify-center gap-2">
+                                    <Smartphone className="h-4 w-4" />
+                                    {bkashLoading === plan.id ? 'Processing...' : 'Pay with bKash'}
+                                </button>
+                                </div>
+                            )}
                         </div>
                       </div>
                     ))}
